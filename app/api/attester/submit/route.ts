@@ -40,8 +40,18 @@ export async function POST(request: NextRequest) {
     const shouldUseFixture =
       useFixture === true ||
       process.env.USE_CRE_FIXTURE === 'true' ||
-      !process.env.INFERENCE_API_KEY ||
-      !process.env.CRE_CALLBACK_URL
+      !process.env.INFERENCE_API_KEY
+
+    // Fixture mode uses local CRE CLI — not available on Vercel
+    if (shouldUseFixture && process.env.VERCEL) {
+      return NextResponse.json(
+        {
+          error:
+            'USE_CRE_FIXTURE is not supported on Vercel. Set INFERENCE_API_KEY and deploy with live Attester.',
+        },
+        { status: 400 },
+      )
+    }
 
     if (shouldUseFixture) {
       const attestation = await runCRECallbackSimulationFromFixture()
@@ -67,14 +77,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const submission = await submitAttesterInference({
-      passportBase64: documentPdfs.passport,
-      bankBase64: documentPdfs.bank,
-      payrollBase64: documentPdfs.payroll,
-      thresholdUSD: threshold,
-      worldIdNullifier,
-      tenantAddress,
-    })
+    const submission = await submitAttesterInference(
+      {
+        passportBase64: documentPdfs.passport,
+        bankBase64: documentPdfs.bank,
+        payrollBase64: documentPdfs.payroll,
+        thresholdUSD: threshold,
+        worldIdNullifier,
+        tenantAddress,
+      },
+      { ensName },
+    )
 
     storeInferenceQueued(submission.inferenceId)
 

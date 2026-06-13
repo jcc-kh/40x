@@ -84,6 +84,62 @@ npm run dev
 
 Set `USE_CRE_FIXTURE=true` to demo without ngrok (uses local CRE callback fixture).
 
+## Deploy to Vercel (recommended — no ngrok)
+
+On Vercel, **`CRE_CALLBACK_URL` is optional**. The app auto-sets:
+
+`https://<your-vercel-domain>/api/attester/callback`
+
+```mermaid
+sequenceDiagram
+    participant T as Tenant browser
+    participant V as your-app.vercel.app
+    participant A as Chainlink Attester
+
+    T->>V: Upload PDFs
+    V->>A: POST /v1/inference cre_callback=https://your-app.vercel.app/api/attester/callback
+    A->>A: TEE inference
+    A->>V: POST /api/attester/callback when done
+    T->>V: Poll /api/attester/status until completed
+    T->>V: Sign ENS txs publish credential
+```
+
+### Vercel environment variables
+
+In **Project → Settings → Environment Variables**, add:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `INFERENCE_API_KEY` | Yes | Server only — not `NEXT_PUBLIC_` |
+| `CHAINLINK_ATTESTER_URL` | Optional | Default sandbox URL is fine |
+| `NEXT_PUBLIC_WORLD_APP_ID` | Yes | |
+| `WORLD_RP_ID` | Yes | Server only |
+| `RP_SIGNING_KEY` | Yes | Server only |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | Yes | |
+| `NEXT_PUBLIC_ENS_CHAIN_ID` | Yes | `11155111` for Sepolia |
+| `ALCHEMY_RPC` | Yes | Server ENS reads |
+| `NEXT_PUBLIC_ALCHEMY_RPC` | Optional | Same URL as above |
+
+**Do not set on Vercel:**
+
+- `USE_CRE_FIXTURE=true` — CRE CLI is not available serverless
+- `CRE_CALLBACK_URL` — unless you use a custom domain (then set `https://yourdomain.com/api/attester/callback`)
+- `NEXT_PUBLIC_TENANT_CREDENTIAL_GATE_ADDRESS` — optional gate contract (skip)
+
+### After deploy checklist
+
+1. **World ID:** add your Vercel URL to allowed origins in [developer.world.org](https://developer.world.org)
+2. **WalletConnect:** allow your Vercel domain in Cloud settings if prompted
+3. **Test callback route:** `curl -X POST https://YOUR-APP.vercel.app/api/attester/callback -H "content-type: application/json" -d '{"id":"test","status":"failed"}'` → should return JSON (not 404)
+4. **Run tenant flow** on production URL with real PDFs
+5. **Landlord verify** at `https://YOUR-APP.vercel.app/verify`
+
+### Vercel limitations
+
+- **SQLite nullifiers** (World ID sybil gate) reset on cold starts — sybil blocking may be unreliable in production; fine for demo
+- **ENS writes** still happen from the tenant's wallet (need Sepolia ETH + ENS name)
+- Record **Scenario 2** with local CRE + ngrok separately if judges want terminal footage
+
 ## Chainlink Attester — Scenario 1 (local)
 
 ```bash

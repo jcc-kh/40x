@@ -2,16 +2,29 @@ import type { DocumentPdfInput } from './types'
 
 const DEFAULT_ATTESTER_URL = 'https://confidential-ai-dev-preview.cldev.cloud'
 
+/** Public URL Attester POSTs to when inference completes. */
+export function resolveCallbackUrl(ensName?: string, thresholdUSD = 5000): string {
+  const base =
+    process.env.CRE_CALLBACK_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}/api/attester/callback` : '')
+
+  if (!base) return ''
+
+  const url = new URL(base)
+  if (ensName) url.searchParams.set('ensName', ensName)
+  url.searchParams.set('thresholdUSD', String(thresholdUSD))
+  return url.toString()
+}
+
 export function getAttesterConfig() {
   const baseUrl = process.env.CHAINLINK_ATTESTER_URL ?? DEFAULT_ATTESTER_URL
   const apiKey = process.env.INFERENCE_API_KEY
-  const callbackUrl = process.env.CRE_CALLBACK_URL
 
   if (!apiKey) {
     throw new Error('INFERENCE_API_KEY is required. Obtain it at the Chainlink desk.')
   }
 
-  return { baseUrl, apiKey, callbackUrl }
+  return { baseUrl, apiKey }
 }
 
 function buildScreeningPrompt(thresholdUSD: number): string {
@@ -25,16 +38,19 @@ Return ONLY valid JSON:
 {"checks":{"nameMatch":"full|partial|none","depositMonths":3,"payrollEmployerMonths":4,"bankPayrollAmountMatch":true,"monthlyIncomeUSD":6200,"documentQuality":"high"},"flags":""}`
 }
 
-export async function submitAttesterInference(input: DocumentPdfInput) {
-  const { baseUrl, apiKey, callbackUrl } = getAttesterConfig()
+export async function submitAttesterInference(
+  input: DocumentPdfInput,
+  options?: { ensName?: string },
+) {
+  const { baseUrl, apiKey } = getAttesterConfig()
+  const thresholdUSD = input.thresholdUSD > 0 ? input.thresholdUSD : 5000
+  const callbackUrl = resolveCallbackUrl(options?.ensName, thresholdUSD)
 
   if (!callbackUrl) {
     throw new Error(
-      'CRE_CALLBACK_URL is required (ngrok tunnel to CRE /trigger or /api/attester/callback)',
+      'CRE_CALLBACK_URL is required locally, or deploy to Vercel (uses VERCEL_URL automatically)',
     )
   }
-
-  const thresholdUSD = input.thresholdUSD > 0 ? input.thresholdUSD : 5000
 
   const body = {
     model: 'gemma4',
