@@ -1,0 +1,8 @@
+staging-settings:
+  user-workflow:
+    workflow-name: "zkcredentials-staging"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+    secrets-path: "./secrets.yaml"
