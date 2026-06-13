@@ -6,7 +6,8 @@ import { normalize } from 'viem/ens'
 
 import {
   CREDENTIAL_TEXT_KEYS,
-  type AttestationResult,
+  getAccessSubname,
+  type DocumentAttestation,
   type CredentialRecord,
 } from './types'
 
@@ -43,6 +44,31 @@ export function createEnsPublicClient() {
   })
 }
 
+function mapCredentialValues(values: string[]): CredentialRecord {
+  return {
+    verified: values[0] || 'false',
+    humanVerified: values[1] || 'false',
+    documentOwnershipVerified: values[2] || 'false',
+    documentsConsistent: values[3] || 'false',
+    incomeVerified: values[4] || 'false',
+    incomeRange: values[5] || 'unknown',
+    employmentStable: values[6] || 'false',
+    confidenceScore: values[7] || '0',
+    inferenceId: values[8] || '',
+    transcriptHash: values[9] || '',
+    documentDigest: values[10] || '',
+    credentialCommitment: values[11] || '',
+    accessSubname: values[12] || '',
+    rotatingPaymentAddr: values[13] || '',
+    attestationHash: values[14] || '',
+    worldIdNullifier: values[15] || '',
+    issuedAt: values[16] || '',
+    expiresAt: values[17] || '',
+    issuer: values[18] || 'zkcredentials',
+    version: values[19] || '1',
+  }
+}
+
 export async function readCredential(ensName: string): Promise<CredentialRecord | null> {
   try {
     const client = createEnsPublicClient()
@@ -60,35 +86,39 @@ export async function readCredential(ensName: string): Promise<CredentialRecord 
 
     if (!values[0]) return null
 
-    return {
-      verified: values[0] || 'false',
-      incomeVerified: values[1] || 'false',
-      identityVerified: values[2] || 'false',
-      incomeRange: values[3] || 'unknown',
-      employerStable: values[4] || 'false',
-      confidenceScore: values[5] || '0',
-      attestationHash: values[6] || '',
-      worldIdNullifier: values[7] || '',
-      issuedAt: values[8] || '',
-      expiresAt: values[9] || '',
-      issuer: values[10] || 'zkcredentials',
-      version: values[11] || '1',
-    }
+    return mapCredentialValues(values)
   } catch {
     return null
   }
 }
 
+export function computeCredentialCommitment(
+  worldIdNullifier: string,
+  attestation: DocumentAttestation,
+) {
+  return keccak256(
+    toBytes(
+      JSON.stringify({
+        nullifier: worldIdNullifier,
+        transcriptHash: attestation.transcriptHash,
+        verified: attestation.verified,
+        incomeRange: attestation.incomeRange,
+        inferenceId: attestation.inferenceId,
+      }),
+    ),
+  )
+}
+
 export function computeAttestationHash(
-  attestation: AttestationResult,
-  ensName: string,
+  attestation: DocumentAttestation,
+  accessSubname: string,
   timestamp: number,
 ) {
   return keccak256(
     toBytes(
       JSON.stringify({
         ...attestation,
-        ensName,
+        accessSubname,
         timestamp,
       }),
     ),
@@ -96,19 +126,32 @@ export function computeAttestationHash(
 }
 
 export function buildCredentialRecords(
-  attestation: AttestationResult,
+  attestation: DocumentAttestation,
   attestationHash: string,
   worldIdNullifier: string,
+  accessSubname: string,
+  rotatingPaymentAddr: string,
   issuedAt: number,
   expiresAt: number,
 ) {
+  const humanVerified = worldIdNullifier.length > 0
+  const credentialCommitment = computeCredentialCommitment(worldIdNullifier, attestation)
+
   return [
     { key: 'zkcred.v1.verified', value: String(attestation.verified) },
+    { key: 'zkcred.v1.humanVerified', value: String(humanVerified) },
+    { key: 'zkcred.v1.documentOwnershipVerified', value: String(attestation.documentOwnershipVerified) },
+    { key: 'zkcred.v1.documentsConsistent', value: String(attestation.documentsConsistent) },
     { key: 'zkcred.v1.incomeVerified', value: String(attestation.incomeVerified) },
-    { key: 'zkcred.v1.identityVerified', value: String(attestation.identityVerified) },
     { key: 'zkcred.v1.incomeRange', value: attestation.incomeRange },
-    { key: 'zkcred.v1.employerStable', value: String(attestation.employerStable) },
+    { key: 'zkcred.v1.employmentStable', value: String(attestation.employmentStable) },
     { key: 'zkcred.v1.confidenceScore', value: attestation.confidenceScore },
+    { key: 'zkcred.v1.inferenceId', value: attestation.inferenceId },
+    { key: 'zkcred.v1.transcriptHash', value: attestation.transcriptHash },
+    { key: 'zkcred.v1.documentDigest', value: attestation.documentDigest },
+    { key: 'zkcred.v1.credentialCommitment', value: credentialCommitment },
+    { key: 'zkcred.v1.accessSubname', value: accessSubname },
+    { key: 'zkcred.v1.rotatingPaymentAddr', value: rotatingPaymentAddr },
     { key: 'zkcred.v1.attestationHash', value: attestationHash },
     { key: 'zkcred.v1.worldId', value: worldIdNullifier },
     { key: 'zkcred.v1.issuedAt', value: String(issuedAt) },
@@ -121,3 +164,5 @@ export function buildCredentialRecords(
 export function getEnsChainId() {
   return ENS_CHAIN_ID
 }
+
+export { getAccessSubname }

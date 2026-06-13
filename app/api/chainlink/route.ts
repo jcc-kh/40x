@@ -1,61 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { runCRESimulation } from '@/lib/chainlink'
-import { computeAttestationHash } from '@/lib/ens'
-import {
-  assertNoExistingCredential,
-  assertNullifierVerified,
-} from '@/lib/nullifiers'
-
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  try {
-    const { documentTexts, thresholdUSD, worldIdNullifier, ensName } = await request.json()
+  const body = await request.json().catch(() => ({}))
+  const target = new URL('/api/attester/submit', request.nextUrl.origin)
 
-    if (!documentTexts || !worldIdNullifier || !ensName) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
+  const response = await fetch(target, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 
-    if (!ensName.endsWith('.eth')) {
-      return NextResponse.json({ error: 'Invalid ENS name' }, { status: 400 })
-    }
-
-    const totalText = Object.values(documentTexts as Record<string, string>).join(' ')
-    if (totalText.length > 6000) {
-      return NextResponse.json(
-        {
-          error:
-            'Document text too long. Please upload shorter documents or extract key sections.',
-        },
-        { status: 400 },
-      )
-    }
-
-    assertNullifierVerified(worldIdNullifier)
-    assertNoExistingCredential(worldIdNullifier)
-
-    const attestation = await runCRESimulation({
-      passportText: documentTexts.passport ?? '',
-      bankText: documentTexts.bank ?? '',
-      payrollText: documentTexts.payroll ?? '',
-      thresholdUSD: thresholdUSD ?? 5000,
-      worldIdNullifier,
-    })
-
-    const timestamp = Date.now()
-    const attestationHash = computeAttestationHash(attestation, ensName, timestamp)
-
-    return NextResponse.json({
-      success: true,
-      attestation,
-      attestationHash,
-      timestamp,
-    })
-  } catch (error) {
-    console.error('Chainlink route error:', error)
-    const message = error instanceof Error ? error.message : 'Failed to process documents'
-    const status = message.includes('already have a credential') ? 409 : 500
-    return NextResponse.json({ error: message }, { status })
-  }
+  const data = await response.json()
+  return NextResponse.json(
+    {
+      ...data,
+      deprecated: true,
+      message: 'Use /api/attester/submit instead of /api/chainlink',
+    },
+    { status: response.status },
+  )
 }

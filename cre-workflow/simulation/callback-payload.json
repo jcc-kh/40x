@@ -1,0 +1,19 @@
+{
+  "id": "019ea31f-test-tenant-screening-001",
+  "status": "completed",
+  "output": "```json\n{\n  \"checks\": {\n    \"nameMatch\": \"full\",\n    \"depositMonths\": 3,\n    \"payrollEmployerMonths\": 4,\n    \"bankPayrollAmountMatch\": true,\n    \"monthlyIncomeUSD\": 6200,\n    \"documentQuality\": \"high\"\n  },\n  \"flags\": \"\"\n}\n```",
+  "documentDigest": "32949a93625bf993f9dfce501544e0f1996c744a24fd9b923103a2e081c9157d",
+  "resource_summaries": [
+    {
+      "digest": "32949a93625bf993f9dfce501544e0f1996c744a24fd9b923103a2e081c9157d",
+      "filename": "passport.pdf"
+    }
+  ],
+  "resources": [
+    {
+      "digest": "32949a93625bf993f9dfce501544e0f1996c744a24fd9b923103a2e081c9157d",
+      "request_digest": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+      "response_digest": "0a0124911560a2236e432d30c3e2a90b0666f4c84b40bf10ba01960595c6ecea"
+    }
+  ]
+}

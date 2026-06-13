@@ -69,7 +69,7 @@ export function WorldIDVerify({ ensName, onVerified, onError }: WorldIDVerifyPro
         onClick={() => setOpen(true)}
         className="rounded bg-black px-6 py-2 text-white"
       >
-        Verify with World ID
+        Prove uniqueness with World ID
       </button>
 
       <IDKitRequestWidget

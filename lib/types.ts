@@ -1,29 +1,49 @@
-export interface DocumentInput {
-  passportText: string
-  bankText: string
-  payrollText: string
+export interface DocumentPdfInput {
+  passportBase64: string
+  bankBase64: string
+  payrollBase64: string
   thresholdUSD: number
   worldIdNullifier: string
+  tenantAddress?: string
 }
 
-export interface AttestationResult {
+export interface DocumentAttestation {
   verified: boolean
+  documentOwnershipVerified: boolean
+  documentsConsistent: boolean
   incomeVerified: boolean
-  identityVerified: boolean
   incomeRange: string
-  employerStable: boolean
+  employmentStable: boolean
   confidenceScore: string
   flags: string
+  inferenceId: string
+  transcriptHash: string
+  documentDigest: string
+}
+
+export interface PublishedCredential extends DocumentAttestation {
+  humanVerified: boolean
   worldIdNullifier: string
+  credentialCommitment: string
+  accessSubname: string
+  rotatingPaymentAddr: string
 }
 
 export const CREDENTIAL_TEXT_KEYS = [
   'zkcred.v1.verified',
+  'zkcred.v1.humanVerified',
+  'zkcred.v1.documentOwnershipVerified',
+  'zkcred.v1.documentsConsistent',
   'zkcred.v1.incomeVerified',
-  'zkcred.v1.identityVerified',
   'zkcred.v1.incomeRange',
-  'zkcred.v1.employerStable',
+  'zkcred.v1.employmentStable',
   'zkcred.v1.confidenceScore',
+  'zkcred.v1.inferenceId',
+  'zkcred.v1.transcriptHash',
+  'zkcred.v1.documentDigest',
+  'zkcred.v1.credentialCommitment',
+  'zkcred.v1.accessSubname',
+  'zkcred.v1.rotatingPaymentAddr',
   'zkcred.v1.attestationHash',
   'zkcred.v1.worldId',
   'zkcred.v1.issuedAt',
@@ -34,11 +54,19 @@ export const CREDENTIAL_TEXT_KEYS = [
 
 export interface CredentialRecord {
   verified: string
+  humanVerified: string
+  documentOwnershipVerified: string
+  documentsConsistent: string
   incomeVerified: string
-  identityVerified: string
   incomeRange: string
-  employerStable: string
+  employmentStable: string
   confidenceScore: string
+  inferenceId: string
+  transcriptHash: string
+  documentDigest: string
+  credentialCommitment: string
+  accessSubname: string
+  rotatingPaymentAddr: string
   attestationHash: string
   worldIdNullifier: string
   issuedAt: string
@@ -48,3 +76,19 @@ export interface CredentialRecord {
 }
 
 export const WORLD_ID_ACTION = 'verify-credential'
+
+export function getAccessSubname(ensName: string): string {
+  const normalized = ensName.trim().toLowerCase()
+  if (normalized.startsWith('screening.')) {
+    return normalized
+  }
+  return `screening.${normalized}`
+}
+
+export function getBaseEnsName(ensName: string): string {
+  const normalized = ensName.trim().toLowerCase()
+  if (normalized.startsWith('screening.')) {
+    return normalized.slice('screening.'.length)
+  }
+  return normalized
+}

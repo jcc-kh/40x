@@ -1,28 +1,40 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { AttestationResult, DocumentInput } from './types'
+import type { DocumentAttestation } from './types'
 
 const RESULT_MARKER = 'Workflow Simulation Result:'
 
-export async function runCRESimulation(input: DocumentInput): Promise<AttestationResult> {
+export async function runCRECallbackSimulation(
+  callbackPayloadPath?: string,
+): Promise<DocumentAttestation> {
   const workflowPath = process.env.CRE_WORKFLOW_PATH ?? join(process.cwd(), 'cre-workflow')
   const creCli = process.env.CRE_CLI_PATH ?? 'cre'
-  const payload = JSON.stringify(input)
+  const payloadPath =
+    callbackPayloadPath ?? join(workflowPath, 'simulation', 'callback-payload.json')
 
-  const tempDir = await mkdtemp(join(tmpdir(), 'zkcred-'))
-  const payloadPath = join(tempDir, 'payload.json')
+  const stdout = await execCRESimulate(creCli, workflowPath, payloadPath)
+  const summary = parseSimulationSummary(stdout)
 
-  try {
-    await writeFile(payloadPath, payload, 'utf8')
-
-    const stdout = await execCRESimulate(creCli, workflowPath, payloadPath)
-    return parseSimulationResult(stdout)
-  } finally {
-    await rm(tempDir, { recursive: true, force: true })
+  return {
+    verified: summary.verified,
+    documentOwnershipVerified: summary.documentOwnershipVerified,
+    documentsConsistent: summary.documentsConsistent,
+    incomeVerified: summary.incomeVerified,
+    incomeRange: summary.incomeRange,
+    employmentStable: summary.employmentStable,
+    confidenceScore: summary.confidenceScore,
+    flags: '',
+    inferenceId: summary.id,
+    transcriptHash: summary.transcriptHash,
+    documentDigest: summary.documentDigest,
   }
+}
+
+export async function runCRECallbackSimulationFromFixture(): Promise<DocumentAttestation> {
+  return runCRECallbackSimulation()
 }
 
 function execCRESimulate(creCli: string, workflowPath: string, payloadPath: string): Promise<string> {
@@ -57,8 +69,8 @@ function execCRESimulate(creCli: string, workflowPath: string, payloadPath: stri
 
     const timeout = setTimeout(() => {
       child.kill('SIGTERM')
-      reject(new Error('CRE workflow simulation timed out after 60 seconds'))
-    }, 60_000)
+      reject(new Error('CRE workflow simulation timed out after 90 seconds'))
+    }, 90_000)
 
     child.on('error', (error) => {
       clearTimeout(timeout)
@@ -84,7 +96,20 @@ function execCRESimulate(creCli: string, workflowPath: string, payloadPath: stri
   })
 }
 
-export function parseSimulationResult(stdout: string): AttestationResult {
+interface WorkflowSummary {
+  id: string
+  verified: boolean
+  documentOwnershipVerified: boolean
+  documentsConsistent: boolean
+  incomeVerified: boolean
+  incomeRange: string
+  employmentStable: boolean
+  confidenceScore: string
+  transcriptHash: string
+  documentDigest: string
+}
+
+export function parseSimulationSummary(stdout: string): WorkflowSummary {
   const markerIndex = stdout.indexOf(RESULT_MARKER)
   if (markerIndex === -1) {
     throw new Error('Could not find workflow simulation result in CRE output')
@@ -98,6 +123,32 @@ export function parseSimulationResult(stdout: string): AttestationResult {
     throw new Error(`Unexpected CRE simulation output: ${afterMarker.slice(0, 200)}`)
   }
 
-  const parsed = JSON.parse(afterMarker.slice(jsonStart, jsonEnd + 1)) as AttestationResult
-  return parsed
+  return JSON.parse(afterMarker.slice(jsonStart, jsonEnd + 1)) as WorkflowSummary
+}
+
+export async function writeTempCallbackPayload(callback: unknown): Promise<string> {
+  const tempDir = await mkdtemp(join(tmpdir(), 'zkcred-cb-'))
+  const payloadPath = join(tempDir, 'callback.json')
+  await writeFile(payloadPath, JSON.stringify(callback), 'utf8')
+  return payloadPath
+}
+
+export async function cleanupTempPath(path: string) {
+  const dir = join(path, '..')
+  await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+}
+
+export async function runCREWithCallbackBody(callbackBody: unknown): Promise<DocumentAttestation> {
+  const payloadPath = await writeTempCallbackPayload(callbackBody)
+  try {
+    return await runCRECallbackSimulation(payloadPath)
+  } finally {
+    await cleanupTempPath(payloadPath)
+  }
+}
+
+export async function loadFixtureCallback(): Promise<unknown> {
+  const workflowPath = process.env.CRE_WORKFLOW_PATH ?? join(process.cwd(), 'cre-workflow')
+  const raw = await readFile(join(workflowPath, 'simulation', 'callback-payload.json'), 'utf8')
+  return JSON.parse(raw) as unknown
 }

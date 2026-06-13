@@ -10,11 +10,11 @@ import {
   ENS_PUBLIC_RESOLVER,
   ENS_PUBLIC_RESOLVER_ABI,
 } from '@/lib/ens'
-import type { AttestationResult } from '@/lib/types'
+import type { DocumentAttestation } from '@/lib/types'
 
 interface EnsWriteProgressProps {
-  ensName: string
-  attestation: AttestationResult
+  accessSubname: string
+  attestation: DocumentAttestation
   attestationHash: string
   worldIdNullifier: string
   onComplete: () => void
@@ -22,7 +22,7 @@ interface EnsWriteProgressProps {
 }
 
 export function EnsWriteProgress({
-  ensName,
+  accessSubname,
   attestation,
   attestationHash,
   worldIdNullifier,
@@ -42,6 +42,8 @@ export function EnsWriteProgress({
     attestation,
     attestationHash,
     worldIdNullifier,
+    accessSubname,
+    '',
     issuedAt,
     expiresAt,
   )
@@ -55,7 +57,7 @@ export function EnsWriteProgress({
     setWriting(true)
 
     try {
-      const node = namehash(ensName)
+      const node = namehash(accessSubname)
 
       for (let index = currentIndex; index < records.length; index += 1) {
         const record = records[index]
@@ -86,10 +88,11 @@ export function EnsWriteProgress({
 
   return (
     <div className="rounded-lg border p-6">
-      <h2 className="mb-2 text-xl font-semibold">Write credential to ENS</h2>
+      <h2 className="mb-2 text-xl font-semibold">Publish credential to ENS subname</h2>
       <p className="mb-4 text-sm text-zinc-600">
-        Sign {records.length} transactions to store your credential on {ensName}. Only conclusions
-        are stored — never raw document text.
+        Sign {records.length} transactions to store your screening credential on{' '}
+        <strong>{accessSubname}</strong>. Includes Chainlink Attester digests and proof anchors —
+        never raw document text.
       </p>
 
       <div className="mb-4 h-2 overflow-hidden rounded bg-zinc-100">

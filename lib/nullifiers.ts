@@ -72,6 +72,6 @@ export function assertNullifierVerified(nullifier: string) {
 
 export function assertNoExistingCredential(nullifier: string) {
   if (hasIssuedCredential(nullifier)) {
-    throw new Error('You already have a credential for this identity')
+    throw new Error('This human already has a credential')
   }
 }

@@ -1,3 +1,6 @@
 {
-  "geminiUrl": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+  "consumerAddress": "0x0000000000000000000000000000000000000000",
+  "chainSelectorName": "ethereum-testnet-sepolia",
+  "tenantAddress": "0x0000000000000000000000000000000000000001",
+  "thresholdUSD": 5000
 }

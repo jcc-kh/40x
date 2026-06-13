@@ -45,7 +45,7 @@ func scoreDocumentQuality(value string) float64 {
 }
 
 func computeConfidenceScore(checks VerificationChecks, thresholdUSD int) float64 {
-	identity := scoreNameMatch(checks.NameMatch)
+	documentOwnership := scoreNameMatch(checks.NameMatch)
 	income := scoreIncome(checks.MonthlyIncomeUSD, thresholdUSD)
 	depositStability := scoreMonths(checks.DepositMonths)
 	employmentStability := scoreMonths(checks.PayrollEmployerMonths)
@@ -55,7 +55,7 @@ func computeConfidenceScore(checks VerificationChecks, thresholdUSD int) float64
 	}
 	quality := scoreDocumentQuality(checks.DocumentQuality)
 
-	score := 0.25*identity +
+	score := 0.25*documentOwnership +
 		0.25*income +
 		0.20*depositStability +
 		0.15*employmentStability +
@@ -84,20 +84,46 @@ func bucketIncomeRange(monthlyIncomeUSD, thresholdUSD int) string {
 	}
 }
 
-func buildAttestation(checks VerificationChecks, thresholdUSD int, flags string) AttestationResult {
+func buildAttestation(
+	checks VerificationChecks,
+	thresholdUSD int,
+	flags string,
+	inferenceID string,
+	transcriptHash string,
+	documentDigest string,
+) AttestationResult {
 	confidence := computeConfidenceScore(checks, thresholdUSD)
-	identityVerified := strings.EqualFold(strings.TrimSpace(checks.NameMatch), "full")
+	documentOwnershipVerified := strings.EqualFold(strings.TrimSpace(checks.NameMatch), "full")
+	documentsConsistent := checks.BankPayrollAmountMatch && checks.DepositMonths >= 2
 	incomeVerified := checks.MonthlyIncomeUSD >= thresholdUSD && checks.MonthlyIncomeUSD > 0
-	employerStable := checks.PayrollEmployerMonths >= 3
-	verified := identityVerified && incomeVerified && confidence >= 0.70
+	employmentStable := checks.PayrollEmployerMonths >= 3
+	verified := documentOwnershipVerified && documentsConsistent && incomeVerified && confidence >= 0.70
 
 	return AttestationResult{
-		Verified:         verified,
-		IncomeVerified:   incomeVerified,
-		IdentityVerified: identityVerified,
-		IncomeRange:      bucketIncomeRange(checks.MonthlyIncomeUSD, thresholdUSD),
-		EmployerStable:   employerStable,
-		ConfidenceScore:  fmt.Sprintf("%.2f", confidence),
-		Flags:            strings.TrimSpace(flags),
+		Verified:                  verified,
+		DocumentOwnershipVerified: documentOwnershipVerified,
+		DocumentsConsistent:       documentsConsistent,
+		IncomeVerified:            incomeVerified,
+		IncomeRange:               bucketIncomeRange(checks.MonthlyIncomeUSD, thresholdUSD),
+		EmploymentStable:          employmentStable,
+		ConfidenceScore:           fmt.Sprintf("%.2f", confidence),
+		Flags:                     strings.TrimSpace(flags),
+		InferenceID:               inferenceID,
+		TranscriptHash:            transcriptHash,
+		DocumentDigest:            documentDigest,
 	}
+}
+
+func buildReason(attestation AttestationResult) string {
+	if attestation.Verified {
+		return fmt.Sprintf(
+			"Tenant screening passed: income %s, confidence %s",
+			attestation.IncomeRange,
+			attestation.ConfidenceScore,
+		)
+	}
+	if attestation.Flags != "" {
+		return attestation.Flags
+	}
+	return "Tenant screening did not meet verification thresholds"
 }

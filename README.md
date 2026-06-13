@@ -1,58 +1,77 @@
 # zkCredentials
 
-Privacy-preserving income credentials for rental applications. Tenants upload financial documents, AI analyzes them inside a Chainlink CRE TEE simulation, World ID prevents duplicate credentials, and conclusions are stored on ENS text records.
+Privacy-preserving tenant screening for rental applications. Sensitive PDFs are analyzed by the **Chainlink Confidential AI Attester** inside a TEE. **World ID** prevents duplicate credentials per human. Screening conclusions and cryptographic proof anchors are stored on **ENS text records** — landlords never see raw documents.
+
+## Problem
+
+Landlords typically require passport copies, bank statements, and pay stubs during screening. That oversharing exposes legal identity, exact income, and account details before a lease is signed. zkCredentials replaces raw document disclosure with a portable screening credential.
+
+**Jane Sybil example:** Without World ID, Jane could create `jane1.eth`, `jane2.eth`, `jane3.eth` with different fabricated docs. World ID nullifier gating ensures one credential per unique human — without revealing Jane's legal name to landlords.
 
 ## Architecture
 
 ```
-Tenant PDFs → client-side text extraction → /api/chainlink
-  → cre workflow simulate (Go + confidentialhttp + Gemini)
-  → attestation JSON → user signs 12 ENS setText txs
-Landlord → /api/credential?ensName=alice.eth → ENS read
+Tenant: World ID → upload PDFs (base64) → POST /api/attester/submit
+  → Chainlink Attester POST /v1/inference (TEE)
+  → cre_callback → CRE Go workflow (parse + score + optional on-chain write)
+  → poll /api/attester/status → attestation + digests
+  → publish 20 ENS text records on screening.{name}.eth
+  → share link + rotate payment alias
+
+Landlord: /verify?ensName=screening.alice.eth → live ENS read
 ```
 
-**Privacy:** raw document text is never stored. SQLite only holds World ID nullifiers for sybil resistance. ENS stores booleans, income buckets, and attestation hash — not names, account numbers, or exact salary.
+## Prize tracks
+
+| Track | Implementation |
+|-------|----------------|
+| **Chainlink Confidential AI Attester** | `/v1/inference` + `cre_callback` + `transcriptHash` / `documentDigest` + `TenantCredentialGate.sol` |
+| **ENS Most Creative** | Verifiable credentials in text records; zk proof anchors; rotating payment alias; subname access tokens |
+| **World ID** | Sybil resistance before Attester run; `humanVerified` at publish |
+
+### ENS creative features (from prize excerpt)
+
+> *"Store verifiable credentials or zk proofs in text records. Build privacy features with auto-rotating addresses on each resolution. Use subnames as access tokens. Surprise us!"*
+
+- **zk proofs:** `transcriptHash`, `documentDigest`, `credentialCommitment`, World ID nullifier
+- **Rotating addresses:** `zkcred.v1.rotatingPaymentAddr` refreshed on each landlord share
+- **Subname access token:** credential lives on `screening.{tenant}.eth`, not primary ENS name
 
 ## Prerequisites
 
-1. **CRE CLI** — `curl -sSL https://app.chain.link/cre/install.sh | bash` then `cre login`
+1. **CRE CLI** v1.19+ — `curl -sSL https://app.chain.link/cre/install.sh | bash`
 2. **Go 1.21+**
-3. **Gemini API key** in `cre-workflow/.env`
-4. **World ID app** at [developer.world.org](https://developer.world.org) — capture `app_id`, `rp_id`, `RP_SIGNING_KEY`
-5. **WalletConnect project ID**
-6. **Alchemy/Infura RPC** for mainnet or Sepolia
-7. **ENS name** you own on the target network
+3. **INFERENCE_API_KEY** from the Chainlink desk
+4. **ngrok** (or cloudflared) for Scenario 2 Attester callback
+5. **World ID app** at [developer.world.org](https://developer.world.org)
+6. **WalletConnect project ID**
+7. **Alchemy RPC** for Sepolia (or mainnet)
+8. **ENS name** you own (Sepolia or mainnet)
+9. **Foundry** (optional) — deploy `TenantCredentialGate.sol`
 
 ## Setup
 
 ```bash
 cp .env.local.example .env.local
-cp cre-workflow/.env.example cre-workflow/.env
-# Fill in all values
+# Fill in INFERENCE_API_KEY, CRE_CALLBACK_URL, World ID, RPC, WalletConnect
 
 npm install
 cd cre-workflow && go mod tidy
 ```
 
-### Environment variables
+### Key environment variables
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_WORLD_APP_ID` | World ID app ID |
-| `WORLD_RP_ID` | World ID RP ID (server-only) |
-| `RP_SIGNING_KEY` | World ID signing key (server-only, once) |
-| `NEXT_PUBLIC_ENS_CHAIN_ID` | `1` mainnet or `11155111` Sepolia |
-| `ALCHEMY_RPC` | Server-side RPC for ENS reads |
-| `NEXT_PUBLIC_ALCHEMY_RPC` | Client RPC (optional) |
-| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | WalletConnect |
-| `CRE_WORKFLOW_PATH` | Default `./cre-workflow` |
-| `CRE_CLI_PATH` | Default `cre` |
+| `INFERENCE_API_KEY` | Chainlink Confidential AI Attester API key (desk) |
+| `CHAINLINK_ATTESTER_URL` | Default `https://confidential-ai-dev-preview.cldev.cloud` |
+| `CRE_CALLBACK_URL` | ngrok URL + `/trigger` (CRE) or `/api/attester/callback` (Next.js) |
+| `CRE_TRIGGER_FORWARD_URL` | Optional `http://localhost:2000/trigger` to forward callbacks to CRE |
+| `CRE_ETH_PRIVATE_KEY` | Sepolia wallet for `cre simulate --broadcast` |
+| `USE_CRE_FIXTURE=true` | Dev fallback: Scenario 1 fixture without live Attester |
+| `NEXT_PUBLIC_TENANT_CREDENTIAL_GATE_ADDRESS` | Deployed gate contract |
 
-Gemini key goes in `cre-workflow/.env`:
-
-```bash
-GEMINI_API_KEY_ENV=your_key
-```
+**Security:** never commit `.env.local` or API keys.
 
 ## Run locally
 
@@ -60,50 +79,99 @@ GEMINI_API_KEY_ENV=your_key
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for the tenant flow and `/verify` for landlords.
+- Tenant flow: [http://localhost:3000](http://localhost:3000)
+- Landlord verify: [http://localhost:3000/verify](http://localhost:3000/verify)
 
-## Test CRE workflow (Chainlink demo)
+Set `USE_CRE_FIXTURE=true` to demo without ngrok (uses local CRE callback fixture).
+
+## Chainlink Attester — Scenario 1 (local)
 
 ```bash
 cd cre-workflow
-cre workflow simulate . --target staging-settings \
-  --non-interactive --trigger-index 0 \
-  --http-payload '{"passportText":"Jane Smith DOB 1990-01-15 Passport No X123","bankText":"Account holder Jane Smith. Jan 1 salary deposit $6500. Feb 1 salary deposit $6500. Mar 1 salary deposit $6500.","payrollText":"Employee Jane Smith, Employer Acme Corp, Monthly salary $6500, pay dates Jan Feb Mar 2026","thresholdUSD":5000,"worldIdNullifier":"0xabc123"}'
+go test ./...
+cre workflow simulate . --target staging-settings --non-interactive \
+  --trigger-index 0 --http-payload ./simulation/callback-payload.json
 ```
 
-Record terminal output showing `Workflow Simulation Result:` JSON for judges.
+Expected: `transcriptHash` and screening fields in `Workflow Simulation Result`.
 
-## confidenceScore rubric
+## Chainlink Attester — Scenario 2 (E2E, for judges)
 
-Gemini returns structured `checks`; Go computes the score deterministically:
+**Terminal 1** — start CRE HTTP trigger:
 
-| Dimension | Weight |
-|-----------|--------|
-| Name match across docs | 25% |
-| Income vs threshold | 25% |
-| Deposit stability (months/3) | 20% |
-| Employment stability (months/3) | 15% |
-| Bank↔payroll amount match | 10% |
-| Document text quality | 5% |
+```bash
+cd cre-workflow
+cre workflow simulate . --broadcast --non-interactive
+```
 
-`verified = identityVerified AND incomeVerified AND confidenceScore >= 0.70`
+**Terminal 2** — expose port 2000:
 
-## Demo script
+```bash
+ngrok http 2000
+export CRE_CALLBACK_URL="https://<id>.ngrok-free.dev/trigger"
+export INFERENCE_API_KEY="your_key"
+```
 
-1. **Tenant:** connect wallet → enter `yourname.eth` → World ID → upload passport/bank/payroll PDFs → wait for TEE simulation → sign 12 ENS transactions
-2. **Landlord:** go to `/verify`, enter same ENS name, see live credential
-3. **Sybil test:** attempt a second credential with the same World ID → blocked
+**Terminal 3** — submit inference:
 
-## Simulation caveat
+```bash
+chmod +x scripts/scenario2-attester.sh
+./scripts/scenario2-attester.sh
+```
 
-In local simulate mode, document text briefly passes through the Next.js server on its way to `cre workflow simulate`. Production CRE deployment would keep that path inside the DON/TEE. This project intentionally skips deployment and uses simulate only.
+Record terminal output showing `queued` → callback logs with `transcriptHash` + `documentDigest`.
+
+## Deploy on-chain consumer (optional)
+
+```bash
+source .env.local
+chmod +x scripts/deploy-gate.sh
+./scripts/deploy-gate.sh
+```
+
+Update `cre-workflow/config.staging.json` `consumerAddress` and `.env.local` `NEXT_PUBLIC_TENANT_CREDENTIAL_GATE_ADDRESS`.
+
+MockKeystoneForwarder (simulation): `0x15fC6ae953E024d975e77382eEeC56A9101f9F88`
+
+Query: `cast call $GATE "canScreen(address)(bool)" $TENANT_ADDRESS`
+
+## Screening credential fields
+
+Landlord sees (on `screening.{name}.eth`):
+
+| Field | Meaning |
+|-------|---------|
+| `humanVerified` | World ID uniqueness (not legal identity) |
+| `documentOwnershipVerified` | Passport anchors bank + payroll ownership |
+| `documentsConsistent` | Financial docs align internally |
+| `incomeVerified` / `incomeRange` | Meets threshold, bucketed range |
+| `employmentStable` | Same employer 3+ months |
+| `transcriptHash` / `documentDigest` | Chainlink Attester cryptographic anchors |
+| `rotatingPaymentAddr` | Fresh alias per landlord share |
+
+**Never stored:** legal name, passport number, exact salary, account numbers.
+
+## Judge demo script (10 min)
+
+1. **Terminal:** `curl POST /v1/inference` → `status: queued`
+2. **Terminal:** CRE callback logs `transcriptHash`, `documentDigest`
+3. **Web:** Tenant World ID → upload PDFs → publish to `screening.alice.eth`
+4. **Web:** Generate landlord share link + rotating payment alias
+5. **Web:** Landlord verifies subname — conclusions + digests, no PDFs
+6. **Web:** Second World ID credential blocked ("This human already has a credential")
 
 ## Project structure
 
 ```
-app/                 Next.js routes and pages
-components/          UI components
-lib/                 ENS, Chainlink subprocess, nullifiers, types
-cre-workflow/        Go CRE workflow (confidentialhttp + Gemini)
-data/                SQLite nullifiers (gitignored, created at runtime)
+app/api/attester/     Attester submit, status, callback routes
+contracts/            TenantCredentialGate.sol
+cre-workflow/         Go CRE callback handler + score.go
+lib/                  attester, ens, parse-callback, inference-store
+scripts/              Scenario 2 curl + gate deploy
 ```
+
+## Limitations
+
+- Full Attester → CRE callback requires a publicly reachable URL (ngrok for local demo; not Vercel serverless)
+- SQLite nullifiers and inference store are local-only
+- Subname writes require ENS permissions on `screening.{name}.eth`

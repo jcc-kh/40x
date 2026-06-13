@@ -1,17 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 import { CredentialCard } from '@/components/CredentialCard'
 import type { CredentialRecord } from '@/lib/types'
 
 export function VerifyForm() {
+  const searchParams = useSearchParams()
   const [ensName, setEnsName] = useState('')
   const [loading, setLoading] = useState(false)
   const [credential, setCredential] = useState<CredentialRecord | null>(null)
   const [resolvedName, setResolvedName] = useState('')
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const preset = searchParams.get('ensName')
+    if (preset) {
+      setEnsName(preset)
+    }
+  }, [searchParams])
 
   async function handleVerify() {
     if (!ensName.endsWith('.eth')) return
@@ -50,7 +59,7 @@ export function VerifyForm() {
       <div className="mb-8 flex gap-3">
         <input
           type="text"
-          placeholder="alice.eth"
+          placeholder="screening.alice.eth"
           value={ensName}
           onChange={(event) => setEnsName(event.target.value)}
           onKeyDown={(event) => {
@@ -67,6 +76,10 @@ export function VerifyForm() {
           {loading ? 'Loading...' : 'Verify'}
         </button>
       </div>
+
+      <p className="mb-6 text-sm text-zinc-500">
+        Enter the access subname the tenant shared — not their primary ENS identity.
+      </p>
 
       {error ? <div className="mb-6 rounded border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
 
@@ -85,7 +98,7 @@ export function VerifyForm() {
             <div>
               <h2 className="text-xl font-semibold">{resolvedName}</h2>
               <p className="text-sm text-zinc-500">
-                {isExpired ? 'Credential expired' : 'Credential valid'}
+                {isExpired ? 'Credential expired' : 'Screening credential valid'}
               </p>
             </div>
           </div>
@@ -94,22 +107,30 @@ export function VerifyForm() {
             ensName={resolvedName}
             attestation={{
               verified: credential.verified === 'true',
+              documentOwnershipVerified: credential.documentOwnershipVerified === 'true',
+              documentsConsistent: credential.documentsConsistent === 'true',
               incomeVerified: credential.incomeVerified === 'true',
-              identityVerified: credential.identityVerified === 'true',
               incomeRange: credential.incomeRange,
-              employerStable: credential.employerStable === 'true',
+              employmentStable: credential.employmentStable === 'true',
               confidenceScore: credential.confidenceScore,
               flags: '',
-              worldIdNullifier: credential.worldIdNullifier,
+              inferenceId: credential.inferenceId,
+              transcriptHash: credential.transcriptHash,
+              documentDigest: credential.documentDigest,
             }}
             attestationHash={credential.attestationHash}
+            humanVerified={credential.humanVerified === 'true'}
+            rotatingPaymentAddr={credential.rotatingPaymentAddr || undefined}
             issuedAt={Number.parseInt(credential.issuedAt, 10)}
             expiresAt={expiresAt}
           />
 
           <p className="text-xs text-zinc-400">
-            Human verified: {credential.worldIdNullifier ? 'World ID' : 'No'} · Verified by
-            Chainlink TEE · Stored on ENS
+            Credential commitment: {credential.credentialCommitment.slice(0, 18)}… · World ID nullifier
+            bound · Chainlink Attester digests on ENS
+          </p>
+          <p className="text-xs text-zinc-500">
+            Screening only. Legal identity is disclosed separately at lease signing.
           </p>
         </div>
       ) : null}
