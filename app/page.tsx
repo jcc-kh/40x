@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function HomePage() {
   return (
     <main className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-2 text-3xl font-bold text-zinc-900">zkCredentials</h1>
+      <h1 className="mb-2 text-3xl font-bold text-zinc-900">40x</h1>
       <p className="mb-8 text-zinc-600">Privacy-preserving tenant screening on ENS</p>
 
       <div className="space-y-6">

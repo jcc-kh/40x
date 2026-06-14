@@ -87,7 +87,7 @@ export function getWorldIdAction(): string {
   return WORLD_ID_ACTION
 }
 
-/** ENS name where zkCredentials text records are stored (base name, no screening. prefix). */
+/** ENS name where 40x credential text records are stored (base name, no screening. prefix). */
 export function getAccessSubname(ensName: string): string {
   const normalized = ensName.trim().toLowerCase()
   if (normalized.startsWith('screening.')) {

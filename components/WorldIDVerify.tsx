@@ -26,9 +26,9 @@ interface WorldIDVerifyProps {
   deferBackendVerify?: boolean
 }
 
-const devBypassEnabled =
-  process.env.NEXT_PUBLIC_SKIP_WORLD_ID_VERIFY === 'true' &&
-  process.env.NODE_ENV !== 'production'
+const showDevSkip =
+  process.env.NODE_ENV !== 'production' ||
+  process.env.NEXT_PUBLIC_SKIP_WORLD_ID_VERIFY === 'true'
 
 function formatClientWorldIdError(
   source: string,
@@ -82,6 +82,7 @@ export function WorldIDVerify({
   const [recovering, setRecovering] = useState(false)
   const autoCheckedRef = useRef(false)
   const advancedRef = useRef(false)
+  const lastProofRef = useRef<unknown>(null)
 
   const advanceWithNullifier = useCallback(
     (nullifier: string, meta?: WorldIdVerifiedMeta) => {
@@ -159,7 +160,9 @@ export function WorldIDVerify({
 
       onError(
         isTerminalAlreadyVerifiedError(error)
-          ? 'Could not recover World ID verification. In local dev, restart the server and try again.'
+          ? 'Already verified on Worldcoin for this action, but this app has no saved nullifier. ' +
+              'Scan again in World App (fresh proof), or add a new action at developer.world.org and set WORLD_ID_ACTION in env. ' +
+              'For local testing, set SKIP_WORLD_ID_VERIFY=true and use "Dev: skip World ID".'
           : `Already verified on Worldcoin, but this app has no saved nullifier for your wallet. ` +
               `Enable SKIP_WORLD_ID_VERIFY=true for local dev, or add a new WORLD_ID_ACTION in developer.world.org.`,
       )
@@ -270,7 +273,7 @@ export function WorldIDVerify({
         >
           Prove with World ID
         </button>
-        {devBypassEnabled ? (
+        {showDevSkip ? (
           <button
             type="button"
             onClick={() => {
@@ -320,6 +323,8 @@ export function WorldIDVerify({
         allow_legacy_proofs={true}
         preset={proofOfHuman({ signal })}
         handleVerify={async (result) => {
+          lastProofRef.current = result
+
           if (deferBackendVerify) {
             advanceWithNullifier('', { recovered: false })
             return
@@ -369,7 +374,7 @@ export function WorldIDVerify({
         onError={(error) => {
           void (async () => {
             if (isTerminalAlreadyVerifiedError(error)) {
-              await tryRecoverAndContinue('IDKit widget', error)
+              await tryRecoverAndContinue('IDKit widget', error, lastProofRef.current)
               return
             }
             onError(

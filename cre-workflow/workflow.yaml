@@ -1,6 +1,6 @@
 staging-settings:
   user-workflow:
-    workflow-name: "zkcredentials-staging"
+    workflow-name: "40x-staging"
     deployment-registry: "private"
   workflow-artifacts:
     workflow-path: "."

@@ -1,4 +1,4 @@
-# zkCredentials
+# 40x
 
 Privacy-preserving tenant screening for rental applications.
 
@@ -10,7 +10,7 @@ Without a way to prove uniqueness, the same person can also spin up multiple ide
 
 ## Solution
 
-zkCredentials replaces raw document disclosure with a portable screening credential.
+40x replaces raw document disclosure with a portable screening credential.
 
 1. A **landlord** starts a screening session and shares an invitation link.
 2. The **tenant** connects a wallet, verifies with World ID, and uploads screening PDFs.
@@ -76,7 +76,7 @@ flowchart TB
 
 ### Tech stack
 
-| Tool | Role in zkCredentials | Documentation |
+| Tool | Role in 40x | Documentation |
 |------|----------------------|---------------|
 | [Next.js](https://nextjs.org) | App framework — landlord and tenant flows, API routes for sessions, attester callbacks, and World ID verification | [Next.js docs](https://nextjs.org/docs) |
 | [World ID](https://world.org/world-id) | Proves the tenant is a unique human before document analysis; nullifier stored to block duplicate credentials | [World ID docs](https://docs.world.org/world-id) |

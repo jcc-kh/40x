@@ -156,7 +156,7 @@ function mapCredentialValues(values: string[]): CredentialRecord {
     worldIdNullifier: values[15] || '',
     issuedAt: values[16] || '',
     expiresAt: values[17] || '',
-    issuer: values[18] || 'zkcredentials',
+    issuer: values[18] || '40x',
     version: values[19] || '1',
     tenantAddress: values[20] || '',
   }
@@ -400,7 +400,7 @@ export function buildCredentialRecords(
     { key: 'zkcred.v1.worldId', value: worldIdNullifier },
     { key: 'zkcred.v1.issuedAt', value: String(issuedAt) },
     { key: 'zkcred.v1.expiresAt', value: String(expiresAt) },
-    { key: 'zkcred.v1.issuer', value: 'zkcredentials' },
+    { key: 'zkcred.v1.issuer', value: '40x' },
     { key: 'zkcred.v1.version', value: '1' },
     { key: 'zkcred.v1.tenantAddress', value: tenantAddress.toLowerCase() },
   ] as const

@@ -4,8 +4,8 @@ import { Providers } from './providers'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'zkCredentials',
-  description: 'Privacy-preserving income credentials on ENS, verified by World ID and Chainlink TEE',
+  title: '40x',
+  description: 'Privacy-preserving tenant screening on ENS, verified by World ID and Chainlink TEE',
 }
 
 export default function RootLayout({

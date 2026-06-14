@@ -17,7 +17,7 @@ export function buildPresentationSiweMessage(params: {
     version: '1',
     chainId: params.chainId,
     nonce: params.nonce,
-    statement: 'Present my zkCredentials screening credential to a landlord.',
+    statement: 'Present my 40x screening credential to a landlord.',
   })
 }
 

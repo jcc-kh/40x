@@ -1,5 +1,5 @@
-const STORAGE_PREFIX = 'zkcred-session'
-const CHANNEL_NAME = 'zkcred-session-complete'
+const STORAGE_PREFIX = '40x-session'
+const CHANNEL_NAME = '40x-session-complete'
 
 export function sessionStorageKey(sessionId: string): string {
   return `${STORAGE_PREFIX}:${sessionId}`

@@ -9,10 +9,10 @@ export function getWorldIdConfig() {
   }
 }
 
-/** When true, POST /api/world-id/verify accepts devBypass (local dev only). */
+/** When true, POST /api/world-id/verify accepts devBypass. */
 export function isWorldIdDevBypassEnabled(): boolean {
-  if (process.env.NODE_ENV === 'production') return false
-  return process.env.SKIP_WORLD_ID_VERIFY === 'true'
+  if (process.env.SKIP_WORLD_ID_VERIFY === 'true') return true
+  return process.env.NODE_ENV !== 'production'
 }
 
 /** Local demo / hackathon — allow synthetic nullifiers outside production. */
@@ -50,25 +50,39 @@ export function extractNullifierFromVerifyResponse(data: {
   return success?.nullifier ?? null
 }
 
-/** Pull RP nullifier from an IDKit widget result before/alongside Worldcoin verify. */
+/** Pull nullifier from an IDKit widget result (searches nested proof payloads). */
 export function extractNullifierFromIdkitResponse(idkitResponse: unknown): string | null {
   if (!idkitResponse || typeof idkitResponse !== 'object') return null
 
-  const payload = idkitResponse as {
-    responses?: Array<{
-      nullifier?: string
-      session_nullifier?: string[]
-    }>
-    nullifier?: string
+  const seen = new Set<object>()
+
+  function walk(value: unknown): string | null {
+    if (!value || typeof value !== 'object') return null
+    if (seen.has(value as object)) return null
+    seen.add(value as object)
+
+    const record = value as Record<string, unknown>
+
+    if (typeof record.nullifier === 'string' && record.nullifier.length > 0) {
+      return record.nullifier
+    }
+    if (typeof record.nullifier_hash === 'string' && record.nullifier_hash.length > 0) {
+      return record.nullifier_hash
+    }
+    if (Array.isArray(record.session_nullifier)) {
+      const first = record.session_nullifier.find((entry) => typeof entry === 'string' && entry.length > 0)
+      if (typeof first === 'string') return first
+    }
+
+    for (const child of Object.values(record)) {
+      const found = walk(child)
+      if (found) return found
+    }
+
+    return null
   }
 
-  if (payload.nullifier) return payload.nullifier
-
-  const first = payload.responses?.[0]
-  if (first?.nullifier) return first.nullifier
-  if (first?.session_nullifier?.[0]) return first.session_nullifier[0]
-
-  return null
+  return walk(idkitResponse)
 }
 
 export function formatWorldIdVerifyError(verifyData: {

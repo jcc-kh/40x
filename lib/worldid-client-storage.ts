@@ -1,6 +1,6 @@
 import { getWorldIdAction } from '@/lib/types'
 
-const STORAGE_PREFIX = 'zkcred-worldid'
+const STORAGE_PREFIX = '40x-worldid'
 
 export interface StoredWorldIdVerification {
   nullifier: string

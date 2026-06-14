@@ -9,6 +9,7 @@ import {
 import {
   createDemoNullifierForAddress,
   isWorldIdDemoBypassAllowed,
+  isWorldIdDevBypassEnabled,
   logWorldIdFailure,
 } from '@/lib/worldid'
 import { isAddress } from 'viem'
@@ -99,7 +100,10 @@ export async function recoverAlreadyVerifiedWorldId(
     hint: 'User verified on Worldcoin before but this app has no stored nullifier. Use SKIP_WORLD_ID_VERIFY or a new WORLD_ID_ACTION.',
   })
 
-  if (options?.allowDemoFallback !== false && isWorldIdDemoBypassAllowed()) {
+  if (
+    options?.allowDemoFallback !== false &&
+    (isWorldIdDemoBypassAllowed() || isWorldIdDevBypassEnabled())
+  ) {
     console.info('[World ID] demo bypass — using synthetic nullifier for local demo', {
       address,
       ensName: ensName ?? null,

@@ -127,7 +127,7 @@ export function parseSimulationSummary(stdout: string): WorkflowSummary {
 }
 
 export async function writeTempCallbackPayload(callback: unknown): Promise<string> {
-  const tempDir = await mkdtemp(join(tmpdir(), 'zkcred-cb-'))
+  const tempDir = await mkdtemp(join(tmpdir(), '40x-cb-'))
   const payloadPath = join(tempDir, 'callback.json')
   await writeFile(payloadPath, JSON.stringify(callback), 'utf8')
   return payloadPath

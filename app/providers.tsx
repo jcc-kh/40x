@@ -16,7 +16,7 @@ const chains: [Chain, ...Chain[]] =
   ensChainId === mainnet.id ? [mainnet, sepolia] : [sepolia, mainnet]
 
 const config = getDefaultConfig({
-  appName: 'zkCredentials',
+  appName: '40x',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '00000000000000000000000000000000',
   chains,
   ssr: true,
