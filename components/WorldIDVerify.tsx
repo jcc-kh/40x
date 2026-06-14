@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { IDKitRequestWidget, proofOfHuman, type RpContext } from '@worldcoin/idkit'
 
 interface WorldIDVerifyProps {
-  ensName: string
-  onVerified: (nullifier: string) => void
+  signal: string
+  onVerified: (nullifier: string, idkitResponse: unknown) => void
   onError: (message: string) => void
+  skipDuplicateCheck?: boolean
 }
 
-export function WorldIDVerify({ ensName, onVerified, onError }: WorldIDVerifyProps) {
+export function WorldIDVerify({ signal, onVerified, onError, skipDuplicateCheck }: WorldIDVerifyProps) {
   const [open, setOpen] = useState(false)
   const [rpContext, setRpContext] = useState<RpContext | null>(null)
   const [loading, setLoading] = useState(false)
@@ -79,12 +80,13 @@ export function WorldIDVerify({ ensName, onVerified, onError }: WorldIDVerifyPro
         action="verify-credential"
         rp_context={rpContext}
         allow_legacy_proofs={true}
-        preset={proofOfHuman({ signal: ensName })}
+        preset={proofOfHuman({ signal })}
         handleVerify={async (result) => {
-          const response = await fetch('/api/world-id/verify', {
+          const endpoint = skipDuplicateCheck ? '/api/world-id/verify-presentation' : '/api/world-id/verify'
+          const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ idkitResponse: result, ensName }),
+            body: JSON.stringify({ idkitResponse: result, signal }),
           })
 
           const data = await response.json()
@@ -92,7 +94,7 @@ export function WorldIDVerify({ ensName, onVerified, onError }: WorldIDVerifyPro
             throw new Error(data.error ?? 'Backend verification failed')
           }
 
-          onVerified(data.nullifier)
+          onVerified(data.nullifier, result)
         }}
         onSuccess={() => setOpen(false)}
         onError={(error) => onError(error ?? 'World ID verification failed')}

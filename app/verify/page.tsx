@@ -9,7 +9,7 @@ export default function VerifyPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Verify Credential</h1>
-          <p className="text-zinc-600">Enter the screening subname the tenant shared</p>
+          <p className="text-zinc-600">Start a session and share the presentation link with your applicant</p>
         </div>
         <Link href="/" className="text-sm underline">
           Tenant flow

@@ -1,11 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { namehash } from 'viem/ens'
-import { waitForTransactionReceipt } from 'viem/actions'
-import { usePublicClient, useWriteContract } from 'wagmi'
 
 import { ConnectWallet } from '@/components/ConnectWallet'
 import { CredentialCard } from '@/components/CredentialCard'
@@ -16,19 +13,15 @@ import {
 } from '@/components/DocumentUpload'
 import { EnsWriteProgress } from '@/components/EnsWriteProgress'
 import { WorldIDVerify } from '@/components/WorldIDVerify'
-import { ENS_PUBLIC_RESOLVER, ENS_PUBLIC_RESOLVER_ABI } from '@/lib/ens'
 import type { DocumentAttestation } from '@/lib/types'
-import { getAccessSubname } from '@/lib/types'
 
-type Step = 'connect' | 'worldid' | 'upload' | 'processing' | 'ens-write' | 'share' | 'done'
+type Step = 'connect' | 'worldid' | 'upload' | 'processing' | 'ens-write' | 'done'
 
 export default function TenantPage() {
   const { isConnected, address } = useAccount()
-  const publicClient = usePublicClient()
-  const { writeContractAsync } = useWriteContract()
 
   const [step, setStep] = useState<Step>('connect')
-  const [ensName, setEnsName] = useState('')
+  const [publishTarget, setPublishTarget] = useState<string | null>(null)
   const [worldIdNullifier, setWorldIdNullifier] = useState<string | null>(null)
   const [documents, setDocuments] = useState<DocumentFiles>({
     passport: null,
@@ -39,12 +32,36 @@ export default function TenantPage() {
   const [attestationHash, setAttestationHash] = useState('')
   const [accessSubname, setAccessSubname] = useState('')
   const [inferenceId, setInferenceId] = useState('')
-  const [shareUrl, setShareUrl] = useState('')
-  const [rotatingPaymentAddr, setRotatingPaymentAddr] = useState('')
-  const [sharing, setSharing] = useState(false)
   const [error, setError] = useState('')
 
-  const subname = ensName ? getAccessSubname(ensName) : ''
+  useEffect(() => {
+    if (!address) {
+      setPublishTarget(null)
+      return
+    }
+
+    async function loadPublishTarget() {
+      const response = await fetch(`/api/credential/discover?address=${address}`)
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error ?? 'Failed to resolve ENS publish target')
+        return
+      }
+
+      if (!data.publishTarget) {
+        setError(
+          'No ENS publish target found. Set NEXT_PUBLIC_REGISTRY_PARENT or connect a wallet that owns an ENS name.',
+        )
+        return
+      }
+
+      setPublishTarget(data.publishTarget)
+      setAccessSubname(data.publishTarget)
+      setError('')
+    }
+
+    void loadPublishTarget()
+  }, [address])
 
   async function pollInferenceStatus(id: string, name: string) {
     const maxAttempts = 60
@@ -81,8 +98,8 @@ export default function TenantPage() {
       setError('World ID verification required')
       return
     }
-    if (!ensName.endsWith('.eth')) {
-      setError('Please enter a valid ENS name (e.g. alice.eth)')
+    if (!address || !publishTarget) {
+      setError('Connect wallet and resolve ENS publish target first')
       return
     }
 
@@ -98,7 +115,6 @@ export default function TenantPage() {
           documentPdfs,
           thresholdUSD: 5000,
           worldIdNullifier,
-          ensName,
           tenantAddress: address,
         }),
       })
@@ -108,7 +124,7 @@ export default function TenantPage() {
         throw new Error(data.error ?? 'Verification failed')
       }
 
-      setAccessSubname(data.accessSubname ?? getAccessSubname(ensName))
+      setAccessSubname(data.accessSubname ?? publishTarget)
       setInferenceId(data.inferenceId ?? '')
 
       if (data.mode === 'fixture' || data.status === 'completed') {
@@ -118,7 +134,7 @@ export default function TenantPage() {
         return
       }
 
-      const completed = await pollInferenceStatus(data.inferenceId, ensName)
+      const completed = await pollInferenceStatus(data.inferenceId, publishTarget)
       setAttestation(completed.attestation)
       setAttestationHash(completed.attestationHash)
       setAccessSubname(completed.accessSubname)
@@ -126,43 +142,6 @@ export default function TenantPage() {
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Failed to generate credential')
       setStep('upload')
-    }
-  }
-
-  async function handleShareWithLandlord() {
-    if (!accessSubname) return
-    setSharing(true)
-    setError('')
-
-    try {
-      const response = await fetch('/api/credential/share', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ensName }),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error ?? 'Failed to generate share link')
-      }
-
-      setShareUrl(data.shareUrl)
-      setRotatingPaymentAddr(data.rotatingPaymentAddr)
-
-      if (publicClient) {
-        const hash = await writeContractAsync({
-          address: ENS_PUBLIC_RESOLVER,
-          abi: ENS_PUBLIC_RESOLVER_ABI,
-          functionName: 'setText',
-          args: [namehash(accessSubname), 'zkcred.v1.rotatingPaymentAddr', data.rotatingPaymentAddr],
-        })
-        await waitForTransactionReceipt(publicClient, { hash })
-      }
-
-      setStep('done')
-    } catch (shareError) {
-      setError(shareError instanceof Error ? shareError.message : 'Failed to share credential')
-    } finally {
-      setSharing(false)
     }
   }
 
@@ -179,8 +158,8 @@ export default function TenantPage() {
       </div>
 
       <div className="mb-6 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-        PDFs are analyzed by the Chainlink Confidential AI Attester inside a TEE. Landlords receive
-        only screening conclusions on <strong>{subname || 'screening.yourname.eth'}</strong> — never raw documents.
+        PDFs are analyzed by the Chainlink Confidential AI Attester inside a TEE. Your wallet
+        determines your registry ENS name — landlords verify via live presentation, not shared links.
       </div>
 
       {error ? (
@@ -191,26 +170,19 @@ export default function TenantPage() {
         <section className="rounded-lg border p-6">
           <h2 className="mb-4 text-xl font-semibold">Step 1: Connect your wallet</h2>
           <p className="mb-4 text-zinc-600">
-            Your credential publishes to a screening subname. Primary ENS identity stays private.
+            Your credential publishes to a registry subname derived from your wallet, or a screening
+            subname under an ENS name you control.
           </p>
           <ConnectWallet />
-          {isConnected ? (
+          {isConnected && publishTarget ? (
             <div className="mt-4 space-y-4">
-              <input
-                type="text"
-                placeholder="your-name.eth"
-                value={ensName}
-                onChange={(event) => setEnsName(event.target.value.trim())}
-                className="w-full rounded border p-2"
-              />
-              <p className="text-xs text-zinc-500">
-                Credential subname: {ensName ? getAccessSubname(ensName) : 'screening.your-name.eth'}
+              <p className="rounded bg-zinc-50 p-3 text-sm">
+                Credential location: <strong>{publishTarget}</strong>
               </p>
               <button
                 type="button"
                 onClick={() => setStep('worldid')}
-                disabled={!ensName.endsWith('.eth')}
-                className="rounded bg-black px-6 py-2 text-white disabled:opacity-50"
+                className="rounded bg-black px-6 py-2 text-white"
               >
                 Continue
               </button>
@@ -219,14 +191,14 @@ export default function TenantPage() {
         </section>
       ) : null}
 
-      {step === 'worldid' ? (
+      {step === 'worldid' && publishTarget ? (
         <section className="rounded-lg border p-6">
           <h2 className="mb-4 text-xl font-semibold">Step 2: Prove you&apos;re a unique person</h2>
           <p className="mb-6 text-zinc-600">
             World ID prevents duplicate tenant profiles. Does not reveal your legal name.
           </p>
           <WorldIDVerify
-            ensName={ensName}
+            signal={publishTarget}
             onVerified={(nullifier) => {
               setWorldIdNullifier(nullifier)
               setStep('upload')
@@ -267,43 +239,31 @@ export default function TenantPage() {
         </section>
       ) : null}
 
-      {step === 'ens-write' && attestation ? (
+      {step === 'ens-write' && attestation && address && (accessSubname || publishTarget) ? (
         <EnsWriteProgress
-          accessSubname={accessSubname || getAccessSubname(ensName)}
+          accessSubname={accessSubname || publishTarget!}
           attestation={attestation}
           attestationHash={attestationHash}
           worldIdNullifier={worldIdNullifier ?? ''}
-          onComplete={() => setStep('share')}
+          tenantAddress={address}
+          onComplete={() => setStep('done')}
           onError={setError}
         />
       ) : null}
 
-      {step === 'share' && attestation ? (
-        <section className="rounded-lg border p-6">
-          <h2 className="mb-2 text-xl font-semibold">Share with landlord</h2>
-          <p className="mb-4 text-sm text-zinc-600">
-            Generate a capability link for <strong>{accessSubname}</strong> and rotate a fresh payment alias.
-          </p>
-          <button
-            type="button"
-            onClick={() => void handleShareWithLandlord()}
-            disabled={sharing}
-            className="rounded bg-black px-6 py-2 text-white disabled:opacity-50"
-          >
-            {sharing ? 'Rotating payment alias…' : 'Generate landlord access link'}
-          </button>
-        </section>
-      ) : null}
-
       {step === 'done' && attestation ? (
-        <CredentialCard
-          ensName={accessSubname || getAccessSubname(ensName)}
-          attestation={attestation}
-          attestationHash={attestationHash}
-          shareUrl={shareUrl}
-          rotatingPaymentAddr={rotatingPaymentAddr}
-          humanVerified
-        />
+        <div className="space-y-4">
+          <CredentialCard
+            ensName={accessSubname || publishTarget || ''}
+            attestation={attestation}
+            attestationHash={attestationHash}
+            humanVerified
+          />
+          <p className="rounded border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            When a landlord starts a verification session, open their presentation link on this
+            device to prove you hold this credential.
+          </p>
+        </div>
       ) : null}
     </main>
   )

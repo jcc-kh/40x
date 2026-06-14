@@ -50,6 +50,7 @@ export const CREDENTIAL_TEXT_KEYS = [
   'zkcred.v1.expiresAt',
   'zkcred.v1.issuer',
   'zkcred.v1.version',
+  'zkcred.v1.tenantAddress',
 ] as const
 
 export interface CredentialRecord {
@@ -73,6 +74,7 @@ export interface CredentialRecord {
   expiresAt: string
   issuer: string
   version: string
+  tenantAddress: string
 }
 
 export const WORLD_ID_ACTION = 'verify-credential'
@@ -80,6 +82,13 @@ export const WORLD_ID_ACTION = 'verify-credential'
 export function getAccessSubname(ensName: string): string {
   const normalized = ensName.trim().toLowerCase()
   if (normalized.startsWith('screening.')) {
+    return normalized
+  }
+  if (normalized.includes('.') && !normalized.endsWith('.eth')) {
+    return normalized
+  }
+  const registryParent = process.env.NEXT_PUBLIC_REGISTRY_PARENT?.trim().toLowerCase()
+  if (registryParent && normalized.endsWith(`.${registryParent}`)) {
     return normalized
   }
   return `screening.${normalized}`

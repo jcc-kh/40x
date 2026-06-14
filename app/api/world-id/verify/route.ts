@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    const { idkitResponse, ensName } = await request.json()
+    const { idkitResponse, ensName, signal } = await request.json()
     const config = getWorldIdConfig()
 
     if (!idkitResponse || !config.rpId) {
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    storeVerifiedNullifier(nullifier, ensName)
+    storeVerifiedNullifier(nullifier, signal ?? ensName)
 
     return NextResponse.json({ success: true, nullifier })
   } catch (error) {

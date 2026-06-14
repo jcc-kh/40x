@@ -1,54 +1,79 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 
 import { CredentialCard } from '@/components/CredentialCard'
 import type { CredentialRecord } from '@/lib/types'
 
 export function VerifyForm() {
-  const searchParams = useSearchParams()
-  const [ensName, setEnsName] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [presentUrl, setPresentUrl] = useState('')
+  const [creating, setCreating] = useState(false)
   const [credential, setCredential] = useState<CredentialRecord | null>(null)
   const [resolvedName, setResolvedName] = useState('')
-  const [notFound, setNotFound] = useState(false)
+  const [tenantAddress, setTenantAddress] = useState('')
+  const [status, setStatus] = useState<'idle' | 'pending' | 'verified' | 'expired'>('idle')
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    const preset = searchParams.get('ensName')
-    if (preset) {
-      setEnsName(preset)
+  const pollSession = useCallback(async (id: string) => {
+    const response = await fetch(`/api/session/${id}`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error ?? 'Failed to load session')
     }
-  }, [searchParams])
 
-  async function handleVerify() {
-    if (!ensName.endsWith('.eth')) return
+    setStatus(data.status)
 
-    setLoading(true)
-    setNotFound(false)
-    setCredential(null)
+    if (data.status === 'verified' && data.credential) {
+      setResolvedName(data.ensName)
+      setTenantAddress(data.tenantAddress ?? '')
+      setCredential(data.credential)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!sessionId || status === 'verified' || status === 'expired') return
+
+    const interval = setInterval(() => {
+      void pollSession(sessionId).catch((pollError) => {
+        setError(pollError instanceof Error ? pollError.message : 'Failed to poll session')
+      })
+    }, 3000)
+
+    void pollSession(sessionId)
+
+    return () => clearInterval(interval)
+  }, [sessionId, status, pollSession])
+
+  async function handleCreateSession() {
+    setCreating(true)
     setError('')
+    setCredential(null)
+    setResolvedName('')
+    setTenantAddress('')
 
     try {
-      const response = await fetch(`/api/credential?ensName=${encodeURIComponent(ensName)}`)
+      const response = await fetch('/api/session/create', { method: 'POST' })
       const data = await response.json()
 
       if (!response.ok) {
-        if (response.status === 404) {
-          setNotFound(true)
-          return
-        }
-        throw new Error(data.error ?? 'Failed to load credential')
+        throw new Error(data.error ?? 'Failed to create session')
       }
 
-      setResolvedName(data.ensName)
-      setCredential(data.credential)
-    } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : 'Verification failed')
+      setSessionId(data.sessionId)
+      setPresentUrl(data.presentUrl)
+      setStatus('pending')
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Failed to create session')
     } finally {
-      setLoading(false)
+      setCreating(false)
     }
+  }
+
+  async function handleCopyLink() {
+    if (!presentUrl) return
+    await navigator.clipboard.writeText(presentUrl)
   }
 
   const expiresAt = credential ? Number.parseInt(credential.expiresAt, 10) : 0
@@ -56,41 +81,56 @@ export function VerifyForm() {
 
   return (
     <>
-      <div className="mb-8 flex gap-3">
-        <input
-          type="text"
-          placeholder="screening.alice.eth"
-          value={ensName}
-          onChange={(event) => setEnsName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') void handleVerify()
-          }}
-          className="flex-1 rounded border p-3 text-lg"
-        />
-        <button
-          type="button"
-          onClick={() => void handleVerify()}
-          disabled={loading || !ensName.endsWith('.eth')}
-          className="rounded bg-black px-6 py-3 text-white disabled:opacity-50"
-        >
-          {loading ? 'Loading...' : 'Verify'}
-        </button>
+      <div className="mb-6 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        Start a verification session and share the link with your applicant. They connect their
+        wallet, re-verify with World ID, and sign — proving they hold the credential, not just the
+        link.
       </div>
 
-      <p className="mb-6 text-sm text-zinc-500">
-        Enter the access subname the tenant shared — not their primary ENS identity.
-      </p>
+      {!sessionId ? (
+        <button
+          type="button"
+          onClick={() => void handleCreateSession()}
+          disabled={creating}
+          className="rounded bg-black px-6 py-3 text-white disabled:opacity-50"
+        >
+          {creating ? 'Creating session…' : 'Start verification session'}
+        </button>
+      ) : null}
 
-      {error ? <div className="mb-6 rounded border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
-
-      {notFound ? (
-        <div className="rounded-lg border p-6 text-center text-zinc-500">
-          No credential found for {ensName}
+      {sessionId && status === 'pending' ? (
+        <div className="mt-6 space-y-4 rounded-lg border p-6">
+          <h2 className="text-lg font-semibold">Waiting for tenant presentation</h2>
+          <p className="text-sm text-zinc-600">
+            Share this link with the applicant (QR, SMS, or in person):
+          </p>
+          <p className="break-all rounded bg-zinc-50 p-3 font-mono text-sm">{presentUrl}</p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => void handleCopyLink()}
+              className="rounded border px-4 py-2 text-sm"
+            >
+              Copy link
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCreateSession()}
+              className="rounded border px-4 py-2 text-sm"
+            >
+              New session
+            </button>
+          </div>
+          <p className="text-sm text-zinc-500">Polling for live proof…</p>
         </div>
       ) : null}
 
+      {error ? (
+        <div className="mt-6 rounded border border-red-200 bg-red-50 p-3 text-red-700">{error}</div>
+      ) : null}
+
       {credential ? (
-        <div className="space-y-4">
+        <div className="mt-6 space-y-4">
           <div className="flex items-center gap-3">
             <span className="text-4xl">
               {credential.verified === 'true' && !isExpired ? '✅' : '⚠️'}
@@ -98,8 +138,11 @@ export function VerifyForm() {
             <div>
               <h2 className="text-xl font-semibold">{resolvedName}</h2>
               <p className="text-sm text-zinc-500">
-                {isExpired ? 'Credential expired' : 'Screening credential valid'}
+                {isExpired ? 'Credential expired' : 'Live presentation verified'}
               </p>
+              {tenantAddress ? (
+                <p className="text-xs text-zinc-400">Holder wallet: {tenantAddress}</p>
+              ) : null}
             </div>
           </div>
 
@@ -126,11 +169,7 @@ export function VerifyForm() {
           />
 
           <p className="text-xs text-zinc-400">
-            Credential commitment: {credential.credentialCommitment.slice(0, 18)}… · World ID nullifier
-            bound · Chainlink Attester digests on ENS
-          </p>
-          <p className="text-xs text-zinc-500">
-            Screening only. Legal identity is disclosed separately at lease signing.
+            SIWE wallet proof · World ID nullifier matched · ENS credential discovered from wallet
           </p>
         </div>
       ) : null}
