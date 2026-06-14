@@ -9,8 +9,9 @@ export function getWorldIdConfig() {
   }
 }
 
-/** When true, POST /api/world-id/verify accepts devBypass (local demo or Vercel with env set). */
+/** When true, POST /api/world-id/verify accepts devBypass (local dev only). */
 export function isWorldIdDevBypassEnabled(): boolean {
+  if (process.env.NODE_ENV === 'production') return false
   return process.env.SKIP_WORLD_ID_VERIFY === 'true'
 }
 

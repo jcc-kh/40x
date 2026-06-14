@@ -27,25 +27,6 @@ type Step =
   | 'sign'
   | 'done'
 
-const worldIdSkipEnabled = process.env.NEXT_PUBLIC_SKIP_WORLD_ID_VERIFY === 'true'
-
-async function registerDemoWorldId(
-  signal: string,
-  walletAddress: string,
-): Promise<{ nullifier: string; verificationSeal?: string } | null> {
-  const response = await fetch('/api/world-id/verify', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ signal, devBypass: true, address: walletAddress }),
-  })
-  const data = await response.json()
-  if (!response.ok) return null
-  return {
-    nullifier: data.nullifier ?? null,
-    verificationSeal: data.verificationSeal,
-  }
-}
-
 interface TenantSessionFlowProps {
   /** Landlord session id from ?session= — required for landlord-initiated screening. */
   sessionId: string | null
@@ -129,7 +110,15 @@ export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowP
 
       setPublishTarget(data.publishTarget)
       setAccessSubname(data.publishTarget)
-      setError('')
+
+      if (data.canPublish === false) {
+        setError(
+          `Credential will publish to ${data.publishTarget}, but this wallet cannot write there yet. ` +
+            'Connect the wallet that owns jessie.eth (on mainnet), or ask your landlord to create your subname.',
+        )
+      } else {
+        setError('')
+      }
 
       if (data.credential?.verified === 'true' && sessionId) {
         setHasExistingCredential(true)
@@ -296,22 +285,6 @@ export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowP
       return
     }
 
-    if (worldIdSkipEnabled && address && publishTarget) {
-      setError('')
-      void (async () => {
-        const result = await registerDemoWorldId(publishTarget, address)
-        if (!result?.nullifier) {
-          setError('Failed to skip World ID for demo — check server logs')
-          setStep('worldid')
-          return
-        }
-        setWorldIdNullifier(result.nullifier)
-        setWorldIdVerificationSeal(result.verificationSeal ?? null)
-        setStep('upload')
-      })()
-      return
-    }
-
     setStep('worldid')
   }
 
@@ -415,38 +388,30 @@ export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowP
       {step === 'worldid' && publishTarget ? (
         <section className="rounded-lg border border-zinc-200 p-6">
           <h2 className="mb-4 text-xl font-semibold text-zinc-900">Step 2: Verify identity (World ID)</h2>
-          {worldIdSkipEnabled ? (
-            <p className="text-sm text-amber-800">
-              Demo mode: World ID is skipped locally. Continuing to document upload…
-            </p>
-          ) : (
-            <>
-              <p className="mb-6 text-zinc-600">
-                Proves you&apos;re a unique person. One screening credential per human — does not reveal
-                your legal name.
-              </p>
-              <WorldIDVerify
-                signal={publishTarget}
-                address={address}
-                onVerified={(nullifier, meta) => {
-                  setError('')
-                  setWorldIdNullifier(nullifier)
-                  setWorldIdVerificationSeal(meta?.verificationSeal ?? null)
-                  if (meta?.alreadyIssuedCredential || hasExistingCredential) {
-                    setHasExistingCredential(true)
-                    setStep('sign')
-                    return
-                  }
-                  setStep('upload')
-                }}
-                onError={setError}
-              />
-              <p className="mt-4 text-xs text-zinc-500">
-                If World App says &quot;already verified&quot;, you&apos;ll be sent to document upload
-                automatically — no extra click needed.
-              </p>
-            </>
-          )}
+          <p className="mb-6 text-zinc-600">
+            Proves you&apos;re a unique person. One screening credential per human — does not reveal
+            your legal name.
+          </p>
+          <WorldIDVerify
+            signal={publishTarget}
+            address={address}
+            onVerified={(nullifier, meta) => {
+              setError('')
+              setWorldIdNullifier(nullifier)
+              setWorldIdVerificationSeal(meta?.verificationSeal ?? null)
+              if (meta?.alreadyIssuedCredential || hasExistingCredential) {
+                setHasExistingCredential(true)
+                setStep('sign')
+                return
+              }
+              setStep('upload')
+            }}
+            onError={setError}
+          />
+          <p className="mt-4 text-xs text-zinc-500">
+            If World App says &quot;already verified&quot;, you&apos;ll be sent to document upload
+            automatically — no extra click needed.
+          </p>
         </section>
       ) : null}
 

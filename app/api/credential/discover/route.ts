@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAddress } from 'viem'
 
-import { discoverCredentialForAddress, resolvePublishTarget } from '@/lib/ens'
+import { discoverCredentialForAddress, canPublishToEnsName, resolvePublishTarget } from '@/lib/ens'
 
 export const runtime = 'nodejs'
 
@@ -14,10 +14,12 @@ export async function GET(request: NextRequest) {
 
   const publishTarget = await resolvePublishTarget(address)
   const discovered = await discoverCredentialForAddress(address)
+  const canPublish = publishTarget ? await canPublishToEnsName(address, publishTarget) : false
 
   return NextResponse.json({
     address,
     publishTarget,
+    canPublish,
     ensName: discovered?.ensName ?? null,
     credential: discovered?.credential ?? null,
   })

@@ -9,6 +9,7 @@ import { getRegistryParent, getRegistrySubname } from './registry'
 import {
   CREDENTIAL_TEXT_KEYS,
   getAccessSubname,
+  getParentDomain,
   type DocumentAttestation,
   type CredentialRecord,
 } from './types'
@@ -209,10 +210,10 @@ async function candidateCredentialNames(address: Address): Promise<string[]> {
   const registryName = getRegistrySubname(address)
   if (registryName) candidates.push(registryName)
 
-  // When registry parent is a 2LD (e.g. jessie.eth), credentials often live on screening.jessie.eth
   const parent = getRegistryParent()
   if (parent && parent.split('.').length === 2) {
-    candidates.push(getAccessSubname(parent))
+    candidates.push(parent)
+    candidates.push(`screening.${parent}`)
   }
 
   try {
@@ -271,10 +272,24 @@ export async function discoverCredentialForAddress(
   return best
 }
 
+export async function canPublishToEnsName(
+  address: Address,
+  ensName: string,
+): Promise<boolean> {
+  if (await addressControlsEnsName(address, ensName)) return true
+
+  const parent = getParentDomain(ensName)
+  if (parent && (await addressControlsEnsName(address, parent))) {
+    return true
+  }
+
+  return false
+}
+
 export async function resolvePublishTarget(address: Address): Promise<string | null> {
   const client = createEnsPublicClient()
 
-  // Prefer screening subname under an ENS name the wallet controls.
+  // Prefer the wallet's ENS name directly for credential text records.
   try {
     const ownedNames = await getNamesForAddress(client, { address })
     const first = ownedNames.find((entry) => entry.name?.endsWith('.eth'))
@@ -290,13 +305,15 @@ export async function resolvePublishTarget(address: Address): Promise<string | n
     // Reverse record may be unset.
   }
 
-  // Demo / landlord registry: screening.{parent} when REGISTRY_PARENT is a 2LD (e.g. jessie.eth).
   const parent = getRegistryParent()
-  if (parent && parent.split('.').length === 2) {
-    return getAccessSubname(parent)
+  if (parent) {
+    if (await addressControlsEnsName(address, parent)) {
+      return parent
+    }
+    return getRegistrySubname(address)
   }
 
-  return getRegistrySubname(address)
+  return null
 }
 
 export async function isAddressCredentialController(

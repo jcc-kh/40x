@@ -16,7 +16,7 @@ import {
   getEnsChainId,
   getResolverAddressForName,
 } from '@/lib/ens'
-import { getBaseEnsName } from '@/lib/types'
+import { getParentDomain } from '@/lib/types'
 import type { DocumentAttestation } from '@/lib/types'
 
 interface EnsWriteProgressProps {
@@ -32,6 +32,15 @@ interface EnsWriteProgressProps {
 
 function getEnsChain() {
   return getEnsChainId() === mainnet.id ? addEnsContracts(mainnet) : addEnsContracts(sepolia)
+}
+
+function formatEnsWriteError(ensName: string, parent: string | null, chainId: number): string {
+  const chainHint =
+    chainId === sepolia.id
+      ? 'jessie.eth lives on Ethereum mainnet — set NEXT_PUBLIC_ENS_CHAIN_ID=1 and switch your wallet to mainnet.'
+      : `Ensure your wallet controls ${ensName} or its parent ${parent ?? 'ENS name'} on chain ${chainId}.`
+
+  return `Cannot publish to ${ensName}. ${chainHint}`
 }
 
 export function EnsWriteProgress({
@@ -81,34 +90,39 @@ export function EnsWriteProgress({
     ensName: string,
     owner: Address,
   ) {
-    if (await ensNameExists(ensName)) return ensName
-
-    if (ensName.startsWith('screening.')) {
-      const parent = getBaseEnsName(ensName)
-      if (!(await addressControlsEnsName(owner, parent))) {
-        throw new Error(
-          `Cannot publish to ${ensName}. Connect a wallet that owns ${parent}, or ask your landlord to create this subname.`,
-        )
-      }
-
-      const subnameTx = createSubname.makeFunctionData(
-        ensWallet as never,
-        {
-          name: ensName,
-          owner,
-          contract: 'registry',
-          resolverAddress: ENS_PUBLIC_RESOLVER,
-        },
+    if (await ensNameExists(ensName)) {
+      if (await addressControlsEnsName(owner, ensName)) return ensName
+      throw new Error(
+        formatEnsWriteError(ensName, getParentDomain(ensName), getEnsChainId()),
       )
-
-      const hash = await sendEnsTransaction(ensWallet, owner, subnameTx)
-      await waitForTransactionReceipt(publicClient!, { hash })
-      return ensName
     }
 
-    throw new Error(
-      `ENS name ${ensName} does not exist for your wallet on chain ${getEnsChainId()}. Connect a wallet that controls an ENS name.`,
+    const parent = getParentDomain(ensName)
+    if (!parent) {
+      throw new Error(
+        `ENS name ${ensName} is not valid on chain ${getEnsChainId()}. Connect a wallet that controls an ENS name.`,
+      )
+    }
+
+    if (!(await addressControlsEnsName(owner, parent))) {
+      throw new Error(
+        formatEnsWriteError(ensName, parent, getEnsChainId()),
+      )
+    }
+
+    const subnameTx = createSubname.makeFunctionData(
+      ensWallet as never,
+      {
+        name: ensName,
+        owner,
+        contract: 'registry',
+        resolverAddress: ENS_PUBLIC_RESOLVER,
+      },
     )
+
+    const hash = await sendEnsTransaction(ensWallet, owner, subnameTx)
+    await waitForTransactionReceipt(publicClient!, { hash })
+    return ensName
   }
 
   async function writeAllRecords() {
@@ -173,7 +187,7 @@ export function EnsWriteProgress({
 
   return (
     <div className="rounded-lg border p-6">
-      <h2 className="mb-2 text-xl font-semibold">Publish credential to ENS subname</h2>
+      <h2 className="mb-2 text-xl font-semibold">Publish credential to ENS</h2>
       <p className="mb-4 text-sm text-zinc-600">
         Sign {records.length} transactions to store your screening credential on{' '}
         <strong>{accessSubname}</strong>. Includes Chainlink Attester digests and proof anchors —

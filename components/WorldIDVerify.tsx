@@ -26,7 +26,9 @@ interface WorldIDVerifyProps {
   deferBackendVerify?: boolean
 }
 
-const devBypassEnabled = process.env.NEXT_PUBLIC_SKIP_WORLD_ID_VERIFY === 'true'
+const devBypassEnabled =
+  process.env.NEXT_PUBLIC_SKIP_WORLD_ID_VERIFY === 'true' &&
+  process.env.NODE_ENV !== 'production'
 
 function formatClientWorldIdError(
   source: string,

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'No screening credential found for this wallet on ENS',
-          hint: 'Ensure ENS records were published from the same wallet. If using REGISTRY_PARENT=jessie.eth, credential may be on screening.jessie.eth — republish from / if needed.',
+          hint: 'Ensure ENS records were published from the same wallet. Credentials are stored on the base ENS name (e.g. jessie.eth).',
         },
         { status: 404 },
       )

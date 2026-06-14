@@ -87,19 +87,16 @@ export function getWorldIdAction(): string {
   return WORLD_ID_ACTION
 }
 
+/** ENS name where zkCredentials text records are stored (base name, no screening. prefix). */
 export function getAccessSubname(ensName: string): string {
   const normalized = ensName.trim().toLowerCase()
   if (normalized.startsWith('screening.')) {
-    return normalized
+    return normalized.slice('screening.'.length)
   }
   if (normalized.includes('.') && !normalized.endsWith('.eth')) {
     return normalized
   }
-  const registryParent = process.env.NEXT_PUBLIC_REGISTRY_PARENT?.trim().toLowerCase()
-  if (registryParent && normalized.endsWith(`.${registryParent}`)) {
-    return normalized
-  }
-  return `screening.${normalized}`
+  return normalized
 }
 
 export function getBaseEnsName(ensName: string): string {
@@ -108,4 +105,12 @@ export function getBaseEnsName(ensName: string): string {
     return normalized.slice('screening.'.length)
   }
   return normalized
+}
+
+/** Parent 2LD for a name, e.g. `jessie.eth` from `screening.jessie.eth` or `052f6194.jessie.eth`. */
+export function getParentDomain(ensName: string): string | null {
+  const normalized = ensName.trim().toLowerCase()
+  const labels = normalized.split('.')
+  if (labels.length < 2 || !normalized.endsWith('.eth')) return null
+  return labels.slice(-2).join('.')
 }
