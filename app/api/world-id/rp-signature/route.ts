@@ -19,6 +19,13 @@ export async function POST(request: NextRequest) {
       action: action ?? config.action,
     })
 
+    console.info('[World ID] rp-signature issued', {
+      action: action ?? config.action,
+      rpId: config.rpId,
+      nonce,
+      expiresAt,
+    })
+
     return NextResponse.json({
       sig,
       nonce,

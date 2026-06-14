@@ -17,24 +17,68 @@ function getDb() {
         nullifier TEXT NOT NULL,
         action TEXT NOT NULL,
         ens_name TEXT,
+        tenant_address TEXT,
         verified_at INTEGER NOT NULL,
         credential_issued INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (nullifier, action)
       );
     `)
+    try {
+      db.exec(`ALTER TABLE nullifiers ADD COLUMN tenant_address TEXT`)
+    } catch {
+      // Column already exists.
+    }
   }
   return db
 }
 
-export function storeVerifiedNullifier(nullifier: string, ensName?: string) {
+export function storeVerifiedNullifier(
+  nullifier: string,
+  ensName?: string,
+  tenantAddress?: string,
+) {
   const database = getDb()
   database
     .prepare(
-      `INSERT INTO nullifiers (nullifier, action, ens_name, verified_at, credential_issued)
-       VALUES (?, ?, ?, ?, 0)
-       ON CONFLICT(nullifier, action) DO UPDATE SET ens_name = excluded.ens_name`,
+      `INSERT INTO nullifiers (nullifier, action, ens_name, tenant_address, verified_at, credential_issued)
+       VALUES (?, ?, ?, ?, ?, 0)
+       ON CONFLICT(nullifier, action) DO UPDATE SET
+         ens_name = excluded.ens_name,
+         tenant_address = COALESCE(excluded.tenant_address, nullifiers.tenant_address)`,
     )
-    .run(nullifier, WORLD_ID_ACTION, ensName ?? null, Math.floor(Date.now() / 1000))
+    .run(
+      nullifier,
+      WORLD_ID_ACTION,
+      ensName ?? null,
+      tenantAddress?.toLowerCase() ?? null,
+      Math.floor(Date.now() / 1000),
+    )
+}
+
+export function getNullifierForWallet(tenantAddress: string): string | null {
+  const database = getDb()
+  const row = database
+    .prepare(
+      `SELECT nullifier FROM nullifiers
+       WHERE tenant_address = ? AND action = ?
+       ORDER BY verified_at DESC
+       LIMIT 1`,
+    )
+    .get(tenantAddress.toLowerCase(), WORLD_ID_ACTION) as { nullifier: string } | undefined
+  return row?.nullifier ?? null
+}
+
+export function getNullifierForEnsName(ensName: string): string | null {
+  const database = getDb()
+  const row = database
+    .prepare(
+      `SELECT nullifier FROM nullifiers
+       WHERE ens_name = ? AND action = ?
+       ORDER BY verified_at DESC
+       LIMIT 1`,
+    )
+    .get(ensName, WORLD_ID_ACTION) as { nullifier: string } | undefined
+  return row?.nullifier ?? null
 }
 
 export function markCredentialIssued(nullifier: string) {

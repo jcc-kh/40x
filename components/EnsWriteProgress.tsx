@@ -17,6 +17,7 @@ interface EnsWriteProgressProps {
   attestation: DocumentAttestation
   attestationHash: string
   worldIdNullifier: string
+  tenantAddress: string
   onComplete: () => void
   onError: (message: string) => void
 }
@@ -26,6 +27,7 @@ export function EnsWriteProgress({
   attestation,
   attestationHash,
   worldIdNullifier,
+  tenantAddress,
   onComplete,
   onError,
 }: EnsWriteProgressProps) {
@@ -46,6 +48,7 @@ export function EnsWriteProgress({
     '',
     issuedAt,
     expiresAt,
+    tenantAddress,
   )
 
   async function writeAllRecords() {

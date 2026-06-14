@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAddress } from 'viem'
 
 import { submitAttesterInference } from '@/lib/attester'
 import { runCRECallbackSimulationFromFixture } from '@/lib/chainlink'
-import { computeAttestationHash } from '@/lib/ens'
+import { computeAttestationHash, resolvePublishTarget } from '@/lib/ens'
 import { storeInferenceQueued } from '@/lib/inference-store'
 import {
   assertNoExistingCredential,
   assertNullifierVerified,
 } from '@/lib/nullifiers'
-import { getAccessSubname } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
@@ -18,23 +18,32 @@ export async function POST(request: NextRequest) {
       documentPdfs,
       thresholdUSD,
       worldIdNullifier,
-      ensName,
       tenantAddress,
       useFixture,
     } = await request.json()
 
-    if (!worldIdNullifier || !ensName) {
+    if (!worldIdNullifier || !tenantAddress) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    if (!ensName.endsWith('.eth')) {
-      return NextResponse.json({ error: 'Invalid ENS name' }, { status: 400 })
+    if (!isAddress(tenantAddress)) {
+      return NextResponse.json({ error: 'Invalid tenantAddress' }, { status: 400 })
     }
 
     assertNullifierVerified(worldIdNullifier)
     assertNoExistingCredential(worldIdNullifier)
 
-    const accessSubname = getAccessSubname(ensName)
+    const accessSubname = await resolvePublishTarget(tenantAddress)
+    if (!accessSubname) {
+      return NextResponse.json(
+        {
+          error:
+            'No ENS publish target for wallet. Set NEXT_PUBLIC_REGISTRY_PARENT or use a wallet with an ENS name.',
+        },
+        { status: 400 },
+      )
+    }
+
     const threshold = thresholdUSD ?? 5000
 
     const shouldUseFixture =
@@ -42,7 +51,6 @@ export async function POST(request: NextRequest) {
       process.env.USE_CRE_FIXTURE === 'true' ||
       !process.env.INFERENCE_API_KEY
 
-    // Fixture mode uses local CRE CLI — not available on Vercel
     if (shouldUseFixture && process.env.VERCEL) {
       return NextResponse.json(
         {
@@ -86,7 +94,7 @@ export async function POST(request: NextRequest) {
         worldIdNullifier,
         tenantAddress,
       },
-      { ensName },
+      { ensName: accessSubname },
     )
 
     storeInferenceQueued(submission.inferenceId)
