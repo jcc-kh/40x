@@ -97,6 +97,44 @@ async function pickWritablePublishTarget(
   return null
 }
 
+/** Best publish target this wallet can write to on the configured ENS chain. */
+export async function resolveWritablePublishTarget(address: Address): Promise<string | null> {
+  const client = createEnsPublicClient()
+  const candidates: string[] = []
+
+  try {
+    const ownedNames = await getNamesForAddress(client, { address })
+    for (const entry of ownedNames) {
+      if (!entry.name?.endsWith('.eth')) continue
+      candidates.push(getAccessSubname(entry.name))
+      candidates.push(entry.name)
+    }
+  } catch {
+    // Subgraph may rate-limit.
+  }
+
+  try {
+    const reverse = await getName(client, { address })
+    if (reverse?.name) {
+      candidates.push(getAccessSubname(reverse.name))
+      candidates.push(reverse.name)
+    }
+  } catch {
+    // Reverse record may be unset.
+  }
+
+  const registrySubname = getRegistrySubname(address)
+  if (registrySubname) candidates.push(registrySubname)
+
+  const parent = getRegistryParent()
+  if (parent) {
+    candidates.push(getAccessSubname(parent))
+    candidates.push(parent)
+  }
+
+  return pickWritablePublishTarget(address, candidates)
+}
+
 function mapCredentialValues(values: string[]): CredentialRecord {
   return {
     verified: values[0] || 'false',
@@ -235,41 +273,30 @@ export async function discoverCredentialForAddress(
 
 export async function resolvePublishTarget(address: Address): Promise<string | null> {
   const client = createEnsPublicClient()
-  const candidates: string[] = []
 
+  // Prefer screening subname under an ENS name the wallet controls.
   try {
     const ownedNames = await getNamesForAddress(client, { address })
-    for (const entry of ownedNames) {
-      if (!entry.name?.endsWith('.eth')) continue
-      candidates.push(getAccessSubname(entry.name))
-      candidates.push(entry.name)
-    }
+    const first = ownedNames.find((entry) => entry.name?.endsWith('.eth'))
+    if (first?.name) return getAccessSubname(first.name)
   } catch {
     // Subgraph may rate-limit; continue with other strategies.
   }
 
   try {
     const reverse = await getName(client, { address })
-    if (reverse?.name) {
-      candidates.push(getAccessSubname(reverse.name))
-      candidates.push(reverse.name)
-    }
+    if (reverse?.name) return getAccessSubname(reverse.name)
   } catch {
     // Reverse record may be unset.
   }
 
-  const registrySubname = getRegistrySubname(address)
-  if (registrySubname) {
-    candidates.push(registrySubname)
-  }
-
+  // Demo / landlord registry: screening.{parent} when REGISTRY_PARENT is a 2LD (e.g. jessie.eth).
   const parent = getRegistryParent()
-  if (parent && parent.split('.').length === 2 && (await addressControlsEnsName(address, parent))) {
-    candidates.push(getAccessSubname(parent))
-    candidates.push(parent)
+  if (parent && parent.split('.').length === 2) {
+    return getAccessSubname(parent)
   }
 
-  return pickWritablePublishTarget(address, candidates)
+  return getRegistrySubname(address)
 }
 
 export async function isAddressCredentialController(

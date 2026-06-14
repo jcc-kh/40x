@@ -122,7 +122,7 @@ export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowP
 
       if (!data.publishTarget) {
         setError(
-          'No ENS publish target for this wallet. Connect a wallet that owns an ENS name on the configured chain (e.g. yourname.eth), or ask your landlord to create a subname for you.',
+          'No ENS publish target for this wallet. Set NEXT_PUBLIC_REGISTRY_PARENT (e.g. jessie.eth) on the deployment, or connect a wallet with an ENS name.',
         )
         return
       }
