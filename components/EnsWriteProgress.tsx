@@ -13,6 +13,7 @@ import {
   buildCredentialRecords,
   ensNameExists,
   ENS_PUBLIC_RESOLVER,
+  explainEnsPublishBlocker,
   getEnsChainId,
   getResolverAddressForName,
 } from '@/lib/ens'
@@ -34,13 +35,6 @@ function getEnsChain() {
   return getEnsChainId() === mainnet.id ? addEnsContracts(mainnet) : addEnsContracts(sepolia)
 }
 
-function formatEnsWriteError(ensName: string, parent: string | null, chainId: number): string {
-  const chainName = chainId === sepolia.id ? 'Sepolia' : chainId === mainnet.id ? 'mainnet' : `chain ${chainId}`
-  return (
-    `Cannot publish to ${ensName}. Connect the wallet that owns ` +
-    `${parent ?? ensName} on ${chainName}, and make sure your wallet is switched to ${chainName}.`
-  )
-}
 
 export function EnsWriteProgress({
   accessSubname,
@@ -91,22 +85,17 @@ export function EnsWriteProgress({
   ) {
     if (await ensNameExists(ensName)) {
       if (await addressControlsEnsName(owner, ensName)) return ensName
-      throw new Error(
-        formatEnsWriteError(ensName, getParentDomain(ensName), getEnsChainId()),
-      )
+      throw new Error(await explainEnsPublishBlocker(owner, ensName))
     }
 
     const parent = getParentDomain(ensName)
-    if (!parent) {
-      throw new Error(
-        `ENS name ${ensName} is not valid on chain ${getEnsChainId()}. Connect a wallet that controls an ENS name.`,
-      )
+    const normalizedName = ensName.trim().toLowerCase()
+    if (!parent || parent === normalizedName) {
+      throw new Error(await explainEnsPublishBlocker(owner, ensName))
     }
 
     if (!(await addressControlsEnsName(owner, parent))) {
-      throw new Error(
-        formatEnsWriteError(ensName, parent, getEnsChainId()),
-      )
+      throw new Error(await explainEnsPublishBlocker(owner, ensName))
     }
 
     const subnameTx = createSubname.makeFunctionData(

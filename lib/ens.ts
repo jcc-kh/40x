@@ -54,6 +54,35 @@ function ownerAddresses(owner: Awaited<ReturnType<typeof getOwner>>): Address[] 
   )
 }
 
+function ensChainLabel(chainId: number): string {
+  if (chainId === sepolia.id) return 'Sepolia'
+  if (chainId === mainnet.id) return 'mainnet'
+  return `chain ${chainId}`
+}
+
+function shortAddress(address: Address): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+function isSecondLevelEnsName(ensName: string): boolean {
+  const normalized = ensName.trim().toLowerCase()
+  const labels = normalized.split('.')
+  return labels.length === 2 && normalized.endsWith('.eth')
+}
+
+function ensRegistrationUrl(chainId: number): string {
+  return chainId === sepolia.id ? 'https://sepolia.app.ens.domains' : 'https://app.ens.domains'
+}
+
+async function readEnsOwnerOnChain(ensName: string, chainId: number): Promise<Address | null> {
+  const client = createPublicClient({
+    chain: chainId === mainnet.id ? addEnsContracts(mainnet) : addEnsContracts(sepolia),
+    transport: http(getRpcUrl()),
+  })
+  const owner = await getOwner(client, { name: normalize(ensName) })
+  return ownerAddresses(owner)[0] ?? null
+}
+
 export async function addressControlsEnsName(
   address: Address,
   ensName: string,
@@ -279,11 +308,70 @@ export async function canPublishToEnsName(
   if (await addressControlsEnsName(address, ensName)) return true
 
   const parent = getParentDomain(ensName)
-  if (parent && (await addressControlsEnsName(address, parent))) {
+  const normalizedName = ensName.trim().toLowerCase()
+  if (parent && parent !== normalizedName && (await addressControlsEnsName(address, parent))) {
     return true
   }
 
   return false
+}
+
+/** Human-readable reason publishing is blocked for this wallet + ENS name on the configured chain. */
+export async function explainEnsPublishBlocker(
+  address: Address,
+  ensName: string,
+): Promise<string> {
+  const chainId = getEnsChainId()
+  const chainLabel = ensChainLabel(chainId)
+  const normalizedName = ensName.trim().toLowerCase()
+  const registerUrl = ensRegistrationUrl(chainId)
+
+  if (await addressControlsEnsName(address, ensName)) {
+    return ''
+  }
+
+  const parent = getParentDomain(ensName)
+  const isSubname = Boolean(parent && parent !== normalizedName)
+  if (isSubname && parent && (await addressControlsEnsName(address, parent))) {
+    return ''
+  }
+
+  const existsOnConfiguredChain = await ensNameExists(ensName)
+
+  if (!existsOnConfiguredChain && isSecondLevelEnsName(ensName)) {
+    if (chainId !== mainnet.id) {
+      const mainnetOwner = await readEnsOwnerOnChain(ensName, mainnet.id)
+      if (mainnetOwner) {
+        return (
+          `${ensName} exists on Ethereum mainnet (owner ${shortAddress(mainnetOwner)}) but is not registered on ${chainLabel}. ` +
+          `This app publishes on ${chainLabel}. Register ${ensName} on ${chainLabel} at ${registerUrl} ` +
+          `with wallet ${shortAddress(address)}, then retry.`
+        )
+      }
+    }
+
+    return (
+      `${ensName} is not registered on ${chainLabel} ENS. Register it at ${registerUrl} ` +
+      `(wallet ${shortAddress(address)} on ${chainLabel}, public resolver), then publish again.`
+    )
+  }
+
+  if (!existsOnConfiguredChain && isSubname && parent) {
+    if (!(await ensNameExists(parent))) {
+      return `${ensName} cannot be created because ${parent} is not registered on ${chainLabel}.`
+    }
+    return `Your wallet does not own ${parent} on ${chainLabel}, so it cannot create ${ensName}.`
+  }
+
+  const owner = await readEnsOwnerOnChain(ensName, chainId)
+  if (owner) {
+    return (
+      `${ensName} on ${chainLabel} is owned by ${shortAddress(owner)}. ` +
+      `You connected ${shortAddress(address)}. Switch to the owner wallet on ${chainLabel}.`
+    )
+  }
+
+  return `Cannot publish to ${ensName} on ${chainLabel}. Connect a wallet that controls this name on ${chainLabel}.`
 }
 
 export async function resolvePublishTarget(address: Address): Promise<string | null> {
