@@ -56,7 +56,10 @@ export async function POST(request: NextRequest) {
     const discovered = await discoverCredentialForAddress(address)
     if (!discovered) {
       return NextResponse.json(
-        { error: 'No screening credential found for this wallet on ENS' },
+        {
+          error: 'No screening credential found for this wallet on ENS',
+          hint: 'Ensure ENS records were published from the same wallet. If using REGISTRY_PARENT=jessie.eth, credential may be on screening.jessie.eth — republish from / if needed.',
+        },
         { status: 404 },
       )
     }

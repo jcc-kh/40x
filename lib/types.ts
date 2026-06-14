@@ -77,8 +77,15 @@ export interface CredentialRecord {
   tenantAddress: string
 }
 
-export const WORLD_ID_ACTION = 'verify-credential'
+export const WORLD_ID_ACTION =
+  process.env.NEXT_PUBLIC_WORLD_ID_ACTION ??
+  process.env.WORLD_ID_ACTION ??
+  'verify-credential'
 export const WORLD_ID_PRESENT_ACTION = 'present-credential'
+
+export function getWorldIdAction(): string {
+  return WORLD_ID_ACTION
+}
 
 export function getAccessSubname(ensName: string): string {
   const normalized = ensName.trim().toLowerCase()

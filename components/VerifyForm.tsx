@@ -91,9 +91,8 @@ export function VerifyForm() {
   return (
     <>
       <div className="mb-6 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        Start a verification session and share the link with your applicant. They connect their
-        wallet and sign — proving they control the credential. World ID uniqueness is checked once
-        at credential creation.
+        Start a screening session and share the link with your applicant. They will connect their
+        wallet, verify with World ID, upload screening PDFs, and sign to submit results to you.
       </div>
 
       {!sessionId || status === 'verified' ? (
@@ -107,15 +106,16 @@ export function VerifyForm() {
             ? 'Creating session…'
             : status === 'verified'
               ? 'Verify another applicant'
-              : 'Start verification session'}
+              : 'Start screening session'}
         </button>
       ) : null}
 
       {sessionId && status === 'pending' ? (
         <div className="mt-6 space-y-4 rounded-lg border border-zinc-200 p-6">
-          <h2 className="text-lg font-semibold text-zinc-900">Waiting for tenant presentation</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Waiting for tenant screening</h2>
           <p className="text-sm text-zinc-600">
-            Share this link with the applicant (QR, SMS, or in person):
+            Share this link with the applicant. They will verify identity, upload documents, and
+            submit:
           </p>
           <a
             href={presentUrl}
@@ -142,7 +142,7 @@ export function VerifyForm() {
               {creating ? 'Creating…' : 'New session'}
             </button>
           </div>
-          <p className="text-sm text-zinc-500">Polling for live proof…</p>
+          <p className="text-sm text-zinc-500">Polling for screening submission…</p>
         </div>
       ) : null}
 
@@ -159,7 +159,7 @@ export function VerifyForm() {
             <div>
               <h2 className="text-xl font-semibold text-zinc-900">{resolvedName}</h2>
               <p className="text-sm text-zinc-500">
-                {isExpired ? 'Credential expired' : 'Live presentation verified'}
+                {isExpired ? 'Credential expired' : 'Screening verified'}
               </p>
               {tenantAddress ? (
                 <p className="text-xs text-zinc-400">Holder wallet: {tenantAddress}</p>

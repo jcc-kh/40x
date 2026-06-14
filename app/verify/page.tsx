@@ -8,11 +8,11 @@ export default function VerifyPage() {
     <main className="mx-auto max-w-2xl p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Verify Credential</h1>
-          <p className="text-zinc-600">Start a session and share the presentation link with your applicant</p>
+          <h1 className="text-3xl font-bold text-zinc-900">Landlord Screening</h1>
+          <p className="text-zinc-600">Start a session and share the invitation link with your applicant</p>
         </div>
-        <Link href="/" className="text-sm underline">
-          Tenant flow
+        <Link href="/" className="text-sm text-blue-700 underline">
+          Home
         </Link>
       </div>
 

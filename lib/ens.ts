@@ -5,7 +5,7 @@ import { getName, getOwner, getRecords } from '@ensdomains/ensjs/public'
 import { getNamesForAddress } from '@ensdomains/ensjs/subgraph'
 import { normalize } from 'viem/ens'
 
-import { getRegistrySubname } from './registry'
+import { getRegistryParent, getRegistrySubname } from './registry'
 import {
   CREDENTIAL_TEXT_KEYS,
   getAccessSubname,
@@ -120,6 +120,12 @@ async function candidateCredentialNames(address: Address): Promise<string[]> {
   const registryName = getRegistrySubname(address)
   if (registryName) candidates.push(registryName)
 
+  // When registry parent is a 2LD (e.g. jessie.eth), credentials often live on screening.jessie.eth
+  const parent = getRegistryParent()
+  if (parent && parent.split('.').length === 2) {
+    candidates.push(getAccessSubname(parent))
+  }
+
   try {
     const ownedNames = await getNamesForAddress(client, { address })
     for (const entry of ownedNames) {
@@ -177,10 +183,9 @@ export async function discoverCredentialForAddress(
 }
 
 export async function resolvePublishTarget(address: Address): Promise<string | null> {
-  const registryName = getRegistrySubname(address)
-  if (registryName) return registryName
-
   const client = createEnsPublicClient()
+
+  // Prefer screening subname under an ENS name the wallet controls (most reliable for writes).
   try {
     const ownedNames = await getNamesForAddress(client, { address })
     const first = ownedNames.find((entry) => entry.name?.endsWith('.eth'))
@@ -196,7 +201,12 @@ export async function resolvePublishTarget(address: Address): Promise<string | n
     // fall through
   }
 
-  return null
+  const parent = getRegistryParent()
+  if (parent && parent.split('.').length === 2) {
+    return getAccessSubname(parent)
+  }
+
+  return getRegistrySubname(address)
 }
 
 export async function isAddressCredentialController(
