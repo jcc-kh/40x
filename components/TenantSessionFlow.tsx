@@ -113,8 +113,7 @@ export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowP
 
       if (data.canPublish === false) {
         setError(
-          `Credential will publish to ${data.publishTarget}, but this wallet cannot write there yet. ` +
-            'Connect the wallet that owns jessie.eth (on mainnet), or ask your landlord to create your subname.',
+          `Credential will publish to ${data.publishTarget}. Connect the wallet that owns that ENS name on mainnet to sign the write transactions.`,
         )
       } else {
         setError('')

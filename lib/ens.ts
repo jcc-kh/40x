@@ -307,9 +307,11 @@ export async function resolvePublishTarget(address: Address): Promise<string | n
 
   const parent = getRegistryParent()
   if (parent) {
-    if (await addressControlsEnsName(address, parent)) {
+    // 2LD registry (e.g. jessie.eth) → credentials on the parent name directly.
+    if (parent.split('.').length === 2) {
       return parent
     }
+    // 3LD+ registry (e.g. rentals.zkcred.eth) → per-wallet subname.
     return getRegistrySubname(address)
   }
 
