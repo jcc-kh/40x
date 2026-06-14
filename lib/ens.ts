@@ -1,7 +1,7 @@
-import { createPublicClient, http, keccak256, toBytes, type Address } from 'viem'
+import { createPublicClient, http, keccak256, toBytes, zeroAddress, type Address } from 'viem'
 import { mainnet, sepolia } from 'viem/chains'
 import { addEnsContracts } from '@ensdomains/ensjs'
-import { getName, getOwner, getRecords } from '@ensdomains/ensjs/public'
+import { getName, getOwner, getRecords, getResolver } from '@ensdomains/ensjs/public'
 import { getNamesForAddress } from '@ensdomains/ensjs/subgraph'
 import { normalize } from 'viem/ens'
 
@@ -44,6 +44,57 @@ export function createEnsPublicClient() {
     chain: getEnsChain(),
     transport: http(getRpcUrl()),
   })
+}
+
+function ownerAddresses(owner: Awaited<ReturnType<typeof getOwner>>): Address[] {
+  if (!owner) return []
+  return [owner.owner, owner.registrant].filter(
+    (entry): entry is Address => Boolean(entry && entry !== zeroAddress),
+  )
+}
+
+export async function addressControlsEnsName(
+  address: Address,
+  ensName: string,
+): Promise<boolean> {
+  const client = createEnsPublicClient()
+  const owner = await getOwner(client, { name: normalize(ensName) })
+  const normalizedAddress = address.toLowerCase()
+  return ownerAddresses(owner).some((entry) => entry.toLowerCase() === normalizedAddress)
+}
+
+export async function ensNameExists(ensName: string): Promise<boolean> {
+  const client = createEnsPublicClient()
+  const owner = await getOwner(client, { name: normalize(ensName) })
+  return ownerAddresses(owner).length > 0
+}
+
+export async function getResolverAddressForName(ensName: string): Promise<Address | null> {
+  const client = createEnsPublicClient()
+  const resolver = await getResolver(client, { name: normalize(ensName) })
+  if (!resolver || resolver === zeroAddress) return null
+  return resolver
+}
+
+async function pickWritablePublishTarget(
+  address: Address,
+  candidates: string[],
+): Promise<string | null> {
+  const unique = dedupeNames(candidates)
+  for (const ensName of unique) {
+    if (await addressControlsEnsName(address, ensName)) {
+      return ensName
+    }
+  }
+
+  for (const ensName of unique) {
+    if (!ensName.startsWith('screening.')) continue
+    const parent = ensName.slice('screening.'.length)
+    if (!(await addressControlsEnsName(address, parent))) continue
+    return ensName
+  }
+
+  return null
 }
 
 function mapCredentialValues(values: string[]): CredentialRecord {
@@ -184,29 +235,41 @@ export async function discoverCredentialForAddress(
 
 export async function resolvePublishTarget(address: Address): Promise<string | null> {
   const client = createEnsPublicClient()
+  const candidates: string[] = []
 
-  // Prefer screening subname under an ENS name the wallet controls (most reliable for writes).
   try {
     const ownedNames = await getNamesForAddress(client, { address })
-    const first = ownedNames.find((entry) => entry.name?.endsWith('.eth'))
-    if (first?.name) return getAccessSubname(first.name)
+    for (const entry of ownedNames) {
+      if (!entry.name?.endsWith('.eth')) continue
+      candidates.push(getAccessSubname(entry.name))
+      candidates.push(entry.name)
+    }
   } catch {
-    // fall through
+    // Subgraph may rate-limit; continue with other strategies.
   }
 
   try {
     const reverse = await getName(client, { address })
-    if (reverse?.name) return getAccessSubname(reverse.name)
+    if (reverse?.name) {
+      candidates.push(getAccessSubname(reverse.name))
+      candidates.push(reverse.name)
+    }
   } catch {
-    // fall through
+    // Reverse record may be unset.
+  }
+
+  const registrySubname = getRegistrySubname(address)
+  if (registrySubname) {
+    candidates.push(registrySubname)
   }
 
   const parent = getRegistryParent()
-  if (parent && parent.split('.').length === 2) {
-    return getAccessSubname(parent)
+  if (parent && parent.split('.').length === 2 && (await addressControlsEnsName(address, parent))) {
+    candidates.push(getAccessSubname(parent))
+    candidates.push(parent)
   }
 
-  return getRegistrySubname(address)
+  return pickWritablePublishTarget(address, candidates)
 }
 
 export async function isAddressCredentialController(

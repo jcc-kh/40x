@@ -14,6 +14,7 @@ import { EnsWriteProgress } from '@/components/EnsWriteProgress'
 import { WorldIDVerify } from '@/components/WorldIDVerify'
 import { getEnsChainId } from '@/lib/ens'
 import { buildPresentationSiweMessage } from '@/lib/siwe'
+import { loadWorldIdVerification } from '@/lib/worldid-client-storage'
 import type { DocumentAttestation } from '@/lib/types'
 
 type Step =
@@ -117,7 +118,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
 
       if (!data.publishTarget) {
         setError(
-          'No ENS publish target for this wallet. Connect a wallet that owns an ENS name (e.g. jessie.eth).',
+          'No ENS publish target for this wallet. Connect a wallet that owns an ENS name on the configured chain (e.g. yourname.eth), or ask your landlord to create a subname for you.',
         )
         return
       }
@@ -174,6 +175,9 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
       return
     }
 
+    const cachedVerification = loadWorldIdVerification(address)
+    const verificationSeal = worldIdVerificationSeal ?? cachedVerification?.verificationSeal ?? null
+
     setStep('processing')
     setError('')
 
@@ -187,7 +191,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
           thresholdUSD: 5000,
           worldIdNullifier,
           tenantAddress: address,
-          verificationSeal: worldIdVerificationSeal,
+          verificationSeal,
         }),
       })
 

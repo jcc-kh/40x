@@ -6,6 +6,10 @@ import type { Address } from 'viem'
 
 import { getWorldIdAction } from '@/lib/types'
 import { isTerminalAlreadyVerifiedError } from '@/lib/worldid-errors'
+import {
+  loadWorldIdVerification,
+  saveWorldIdVerification,
+} from '@/lib/worldid-client-storage'
 
 export interface WorldIdVerifiedMeta {
   recovered?: boolean
@@ -82,9 +86,15 @@ export function WorldIDVerify({
       if (advancedRef.current) return
       advancedRef.current = true
       setOpen(false)
+      if (address && nullifier) {
+        saveWorldIdVerification(address, {
+          nullifier,
+          verificationSeal: meta?.verificationSeal,
+        })
+      }
       onVerified(nullifier, meta)
     },
-    [onVerified],
+    [address, onVerified],
   )
 
   const tryRecoverAndContinue = useCallback(
@@ -199,6 +209,18 @@ export function WorldIDVerify({
     autoCheckedRef.current = true
 
     void (async () => {
+      const cached = loadWorldIdVerification(address)
+      if (cached?.nullifier) {
+        console.info('[World ID client] restored verification from browser storage', {
+          nullifier: cached.nullifier.slice(0, 16) + '…',
+        })
+        advanceWithNullifier(cached.nullifier, {
+          recovered: true,
+          verificationSeal: cached.verificationSeal,
+        })
+        return
+      }
+
       setRecovering(true)
       try {
         const recovered = await recoverAlreadyVerified(address, signal)
@@ -323,6 +345,12 @@ export function WorldIDVerify({
               data.code
                 ? `${data.code}: ${data.error ?? 'Backend verification failed'}`
                 : (data.error ?? 'Backend verification failed'),
+            )
+          }
+
+          if (!data.verificationSeal && address && process.env.NODE_ENV === 'production') {
+            console.warn(
+              '[World ID client] verify succeeded without verificationSeal — attester submit may fail on Vercel',
             )
           }
 

@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
       source: recovered.source,
       alreadyIssuedCredential: recovered.alreadyIssuedCredential,
       demoBypass: recovered.source === 'demo',
-      verificationSeal: issueWorldIdVerificationSeal(recovered.nullifier, address),
+      verificationSeal: process.env.RP_SIGNING_KEY
+        ? issueWorldIdVerificationSeal(recovered.nullifier, address)
+        : undefined,
     })
   } catch (error) {
     console.error('[World ID] recover error:', error)

@@ -24,11 +24,13 @@ export const runtime = 'nodejs'
 
 function sealForAddress(nullifier: string, address?: string) {
   if (!address || !isAddress(address)) return undefined
-  try {
-    return issueWorldIdVerificationSeal(nullifier, address)
-  } catch {
+  if (!process.env.RP_SIGNING_KEY) {
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+      throw new Error('RP_SIGNING_KEY is not configured')
+    }
     return undefined
   }
+  return issueWorldIdVerificationSeal(nullifier, address)
 }
 
 export async function POST(request: NextRequest) {

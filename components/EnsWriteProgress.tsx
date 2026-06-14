@@ -1,15 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { namehash } from 'viem/ens'
+import { addEnsContracts } from '@ensdomains/ensjs'
+import { createSubname, setTextRecord } from '@ensdomains/ensjs/wallet'
+import { createWalletClient, custom, type Address } from 'viem'
+import { mainnet, sepolia } from 'viem/chains'
 import { waitForTransactionReceipt } from 'viem/actions'
-import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
 
 import {
+  addressControlsEnsName,
   buildCredentialRecords,
+  ensNameExists,
   ENS_PUBLIC_RESOLVER,
-  ENS_PUBLIC_RESOLVER_ABI,
+  getEnsChainId,
+  getResolverAddressForName,
 } from '@/lib/ens'
+import { getBaseEnsName } from '@/lib/types'
 import type { DocumentAttestation } from '@/lib/types'
 
 interface EnsWriteProgressProps {
@@ -23,6 +30,10 @@ interface EnsWriteProgressProps {
   onError: (message: string) => void
 }
 
+function getEnsChain() {
+  return getEnsChainId() === mainnet.id ? addEnsContracts(mainnet) : addEnsContracts(sepolia)
+}
+
 export function EnsWriteProgress({
   accessSubname,
   attestation,
@@ -33,9 +44,8 @@ export function EnsWriteProgress({
   onComplete,
   onError,
 }: EnsWriteProgressProps) {
-  const { address } = useAccount()
-  const publicClient = usePublicClient()
-  const { writeContractAsync } = useWriteContract()
+  const { address, connector } = useAccount()
+  const publicClient = usePublicClient({ chainId: getEnsChainId() })
   const [currentIndex, setCurrentIndex] = useState(0)
   const [writing, setWriting] = useState(false)
   const [done, setDone] = useState(false)
@@ -53,26 +63,92 @@ export function EnsWriteProgress({
     tenantAddress,
   )
 
+  async function sendEnsTransaction(
+    ensWallet: ReturnType<typeof createWalletClient>,
+    owner: Address,
+    request: { to: Address; data: `0x${string}` },
+  ) {
+    return ensWallet.sendTransaction({
+      account: owner,
+      chain: getEnsChain(),
+      to: request.to,
+      data: request.data,
+    })
+  }
+
+  async function ensureWritableTarget(
+    ensWallet: ReturnType<typeof createWalletClient>,
+    ensName: string,
+    owner: Address,
+  ) {
+    if (await ensNameExists(ensName)) return ensName
+
+    if (ensName.startsWith('screening.')) {
+      const parent = getBaseEnsName(ensName)
+      if (!(await addressControlsEnsName(owner, parent))) {
+        throw new Error(
+          `Cannot publish to ${ensName}. Connect a wallet that owns ${parent}, or ask your landlord to create this subname.`,
+        )
+      }
+
+      const subnameTx = createSubname.makeFunctionData(
+        ensWallet as never,
+        {
+          name: ensName,
+          owner,
+          contract: 'registry',
+          resolverAddress: ENS_PUBLIC_RESOLVER,
+        },
+      )
+
+      const hash = await sendEnsTransaction(ensWallet, owner, subnameTx)
+      await waitForTransactionReceipt(publicClient!, { hash })
+      return ensName
+    }
+
+    throw new Error(
+      `ENS name ${ensName} does not exist for your wallet on chain ${getEnsChainId()}. Connect a wallet that controls an ENS name.`,
+    )
+  }
+
   async function writeAllRecords() {
     if (!address || !publicClient) {
       onError('Connect your wallet before writing ENS records')
       return
     }
 
+    const provider = await connector?.getProvider()
+    if (!provider) {
+      onError('Wallet provider unavailable')
+      return
+    }
+
+    const ensWallet = createWalletClient({
+      account: address,
+      chain: getEnsChain(),
+      transport: custom(provider as Parameters<typeof custom>[0]),
+    })
+
     setWriting(true)
 
     try {
-      const node = namehash(accessSubname)
+      const writableName = await ensureWritableTarget(ensWallet, accessSubname, address)
+      const resolverAddress =
+        (await getResolverAddressForName(writableName)) ?? ENS_PUBLIC_RESOLVER
 
       for (let index = currentIndex; index < records.length; index += 1) {
         const record = records[index]
-        const hash = await writeContractAsync({
-          address: ENS_PUBLIC_RESOLVER,
-          abi: ENS_PUBLIC_RESOLVER_ABI,
-          functionName: 'setText',
-          args: [node, record.key, record.value],
-        })
+        const textTx = setTextRecord.makeFunctionData(
+          ensWallet as never,
+          {
+            name: writableName,
+            key: record.key,
+            value: record.value,
+            resolverAddress,
+          },
+        )
 
+        const hash = await sendEnsTransaction(ensWallet, address, textTx)
         await waitForTransactionReceipt(publicClient, { hash })
         setCurrentIndex(index + 1)
       }

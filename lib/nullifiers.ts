@@ -132,6 +132,19 @@ export async function resolveVerifiedNullifier(
       storeVerifiedNullifier(nullifier, context.ensName, context.tenantAddress)
       return
     }
+
+    if (process.env.VERCEL) {
+      console.error('[World ID] verification seal rejected on submit', {
+        tenantAddress: context.tenantAddress,
+        hasEnsName: Boolean(context.ensName),
+        hint: 'Ensure RP_SIGNING_KEY matches between /api/world-id/verify and /api/attester/submit.',
+      })
+    }
+  } else if (process.env.VERCEL && context?.tenantAddress) {
+    console.error('[World ID] missing verification seal on serverless submit', {
+      tenantAddress: context.tenantAddress,
+      hint: 'Client must send verificationSeal from /api/world-id/verify — SQLite is not shared across Vercel lambdas.',
+    })
   }
 
   if (context?.tenantAddress) {
