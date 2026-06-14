@@ -1,16 +1,16 @@
 import Database from 'better-sqlite3'
-import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+
+import { ensureSqliteDirectory, resolveSqlitePath } from '@/lib/sqlite-path'
 
 import { WORLD_ID_ACTION } from './types'
 
-const DB_PATH = join(process.cwd(), 'data', 'nullifiers.db')
+const DB_PATH = resolveSqlitePath('nullifiers.db')
 
 let db: Database.Database | null = null
 
 function getDb() {
   if (!db) {
-    mkdirSync(dirname(DB_PATH), { recursive: true })
+    ensureSqliteDirectory(DB_PATH)
     db = new Database(DB_PATH)
     db.exec(`
       CREATE TABLE IF NOT EXISTS nullifiers (

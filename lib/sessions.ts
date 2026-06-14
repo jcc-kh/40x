@@ -1,11 +1,10 @@
 import Database from 'better-sqlite3'
-import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
+import { ensureSqliteDirectory, resolveSqlitePath } from '@/lib/sqlite-path'
 import type { CredentialRecord } from './types'
 
-const DB_PATH = join(process.cwd(), 'data', 'sessions.db')
+const DB_PATH = resolveSqlitePath('sessions.db')
 const SESSION_TTL_SECONDS = 60 * 60 * 24
 
 export type SessionStatus = 'pending' | 'verified' | 'expired'
@@ -26,7 +25,7 @@ let db: Database.Database | null = null
 
 function getDb() {
   if (!db) {
-    mkdirSync(dirname(DB_PATH), { recursive: true })
+    ensureSqliteDirectory(DB_PATH)
     db = new Database(DB_PATH)
     db.exec(`
       CREATE TABLE IF NOT EXISTS verification_sessions (
