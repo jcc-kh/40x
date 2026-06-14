@@ -22,10 +22,10 @@ export function CredentialCard({
   expiresAt,
 }: CredentialCardProps) {
   return (
-    <div className="rounded-lg border p-6">
+    <div className="rounded-lg border border-zinc-200 bg-white p-6 text-zinc-900">
       <div className="mb-4 flex items-center gap-2">
         <span className="text-2xl">{attestation.verified ? '✅' : '❌'}</span>
-        <h2 className="text-xl font-semibold">
+        <h2 className="text-xl font-semibold text-zinc-900">
           {attestation.verified ? 'Screening Credential' : 'Verification Failed'}
         </h2>
       </div>
@@ -82,7 +82,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4 border-b border-zinc-100 py-2 last:border-0">
       <span className="text-zinc-600">{label}</span>
-      <span className="text-right font-medium">{value}</span>
+      <span className="text-right font-medium text-zinc-900">{value}</span>
     </div>
   )
 }

@@ -1,9 +1,11 @@
-import { createPublicClient, http, keccak256, toBytes } from 'viem'
+import { createPublicClient, http, keccak256, toBytes, type Address } from 'viem'
 import { mainnet, sepolia } from 'viem/chains'
 import { addEnsContracts } from '@ensdomains/ensjs'
-import { getRecords } from '@ensdomains/ensjs/public'
+import { getName, getOwner, getRecords } from '@ensdomains/ensjs/public'
+import { getNamesForAddress } from '@ensdomains/ensjs/subgraph'
 import { normalize } from 'viem/ens'
 
+import { getRegistryParent, getRegistrySubname } from './registry'
 import {
   CREDENTIAL_TEXT_KEYS,
   getAccessSubname,
@@ -66,6 +68,7 @@ function mapCredentialValues(values: string[]): CredentialRecord {
     expiresAt: values[17] || '',
     issuer: values[18] || 'zkcredentials',
     version: values[19] || '1',
+    tenantAddress: values[20] || '',
   }
 }
 
@@ -90,6 +93,137 @@ export async function readCredential(ensName: string): Promise<CredentialRecord 
   } catch {
     return null
   }
+}
+
+export interface DiscoveredCredential {
+  ensName: string
+  credential: CredentialRecord
+  issuedAt: number
+}
+
+function dedupeNames(names: string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const name of names) {
+    const normalized = name.trim().toLowerCase()
+    if (!normalized.endsWith('.eth') || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
+}
+
+async function candidateCredentialNames(address: Address): Promise<string[]> {
+  const client = createEnsPublicClient()
+  const candidates: string[] = []
+
+  const registryName = getRegistrySubname(address)
+  if (registryName) candidates.push(registryName)
+
+  // When registry parent is a 2LD (e.g. jessie.eth), credentials often live on screening.jessie.eth
+  const parent = getRegistryParent()
+  if (parent && parent.split('.').length === 2) {
+    candidates.push(getAccessSubname(parent))
+  }
+
+  try {
+    const ownedNames = await getNamesForAddress(client, { address })
+    for (const entry of ownedNames) {
+      if (!entry.name) continue
+      candidates.push(entry.name)
+      candidates.push(getAccessSubname(entry.name))
+    }
+  } catch {
+    // Subgraph may rate-limit; continue with other strategies.
+  }
+
+  try {
+    const reverse = await getName(client, { address })
+    if (reverse?.name) {
+      candidates.push(reverse.name)
+      candidates.push(getAccessSubname(reverse.name))
+    }
+  } catch {
+    // Reverse record may be unset.
+  }
+
+  return dedupeNames(candidates)
+}
+
+function credentialIssuedAt(credential: CredentialRecord): number {
+  const parsed = Number.parseInt(credential.issuedAt, 10)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function credentialMatchesAddress(credential: CredentialRecord, address: Address): boolean {
+  if (credential.tenantAddress) {
+    return credential.tenantAddress.toLowerCase() === address.toLowerCase()
+  }
+  return true
+}
+
+export async function discoverCredentialForAddress(
+  address: Address,
+): Promise<DiscoveredCredential | null> {
+  const names = await candidateCredentialNames(address)
+  let best: DiscoveredCredential | null = null
+
+  for (const ensName of names) {
+    const credential = await readCredential(ensName)
+    if (!credential || credential.verified !== 'true') continue
+    if (!credentialMatchesAddress(credential, address)) continue
+
+    const issuedAt = credentialIssuedAt(credential)
+    if (!best || issuedAt >= best.issuedAt) {
+      best = { ensName, credential, issuedAt }
+    }
+  }
+
+  return best
+}
+
+export async function resolvePublishTarget(address: Address): Promise<string | null> {
+  const client = createEnsPublicClient()
+
+  // Prefer screening subname under an ENS name the wallet controls (most reliable for writes).
+  try {
+    const ownedNames = await getNamesForAddress(client, { address })
+    const first = ownedNames.find((entry) => entry.name?.endsWith('.eth'))
+    if (first?.name) return getAccessSubname(first.name)
+  } catch {
+    // fall through
+  }
+
+  try {
+    const reverse = await getName(client, { address })
+    if (reverse?.name) return getAccessSubname(reverse.name)
+  } catch {
+    // fall through
+  }
+
+  const parent = getRegistryParent()
+  if (parent && parent.split('.').length === 2) {
+    return getAccessSubname(parent)
+  }
+
+  return getRegistrySubname(address)
+}
+
+export async function isAddressCredentialController(
+  address: Address,
+  ensName: string,
+): Promise<boolean> {
+  const credential = await readCredential(ensName)
+  if (credential?.tenantAddress) {
+    return credential.tenantAddress.toLowerCase() === address.toLowerCase()
+  }
+
+  const client = createEnsPublicClient()
+  const owner = await getOwner(client, { name: normalize(ensName) })
+  if (!owner) return false
+
+  const owners = [owner.owner, owner.registrant].filter(Boolean) as Address[]
+  return owners.some((entry) => entry.toLowerCase() === address.toLowerCase())
 }
 
 export function computeCredentialCommitment(
@@ -133,6 +267,7 @@ export function buildCredentialRecords(
   rotatingPaymentAddr: string,
   issuedAt: number,
   expiresAt: number,
+  tenantAddress: string,
 ) {
   const humanVerified = worldIdNullifier.length > 0
   const credentialCommitment = computeCredentialCommitment(worldIdNullifier, attestation)
@@ -158,6 +293,7 @@ export function buildCredentialRecords(
     { key: 'zkcred.v1.expiresAt', value: String(expiresAt) },
     { key: 'zkcred.v1.issuer', value: 'zkcredentials' },
     { key: 'zkcred.v1.version', value: '1' },
+    { key: 'zkcred.v1.tenantAddress', value: tenantAddress.toLowerCase() },
   ] as const
 }
 
