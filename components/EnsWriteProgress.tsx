@@ -35,12 +35,11 @@ function getEnsChain() {
 }
 
 function formatEnsWriteError(ensName: string, parent: string | null, chainId: number): string {
-  const chainHint =
-    chainId === sepolia.id
-      ? 'jessie.eth lives on Ethereum mainnet — set NEXT_PUBLIC_ENS_CHAIN_ID=1 and switch your wallet to mainnet.'
-      : `Ensure your wallet controls ${ensName} or its parent ${parent ?? 'ENS name'} on chain ${chainId}.`
-
-  return `Cannot publish to ${ensName}. ${chainHint}`
+  const chainName = chainId === sepolia.id ? 'Sepolia' : chainId === mainnet.id ? 'mainnet' : `chain ${chainId}`
+  return (
+    `Cannot publish to ${ensName}. Connect the wallet that owns ` +
+    `${parent ?? ensName} on ${chainName}, and make sure your wallet is switched to ${chainName}.`
+  )
 }
 
 export function EnsWriteProgress({

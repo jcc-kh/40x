@@ -112,8 +112,9 @@ export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowP
       setAccessSubname(data.publishTarget)
 
       if (data.canPublish === false) {
+        const chainName = getEnsChainId() === 11155111 ? 'Sepolia' : 'the configured ENS network'
         setError(
-          `Credential will publish to ${data.publishTarget}. Connect the wallet that owns that ENS name on mainnet to sign the write transactions.`,
+          `Credential will publish to ${data.publishTarget}. Connect the wallet that owns that ENS name on ${chainName} and switch your wallet to the same network.`,
         )
       } else {
         setError('')
