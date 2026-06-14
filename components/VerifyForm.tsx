@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { CredentialCard } from '@/components/CredentialCard'
+import {
+  loadVerifiedSessionSeal,
+  subscribeVerifiedSession,
+} from '@/lib/session-client-storage'
 import type { CredentialRecord } from '@/lib/types'
 
 export function VerifyForm() {
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionSeal, setSessionSeal] = useState('')
   const [presentUrl, setPresentUrl] = useState('')
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -16,12 +21,14 @@ export function VerifyForm() {
   const [status, setStatus] = useState<'idle' | 'pending' | 'verified' | 'expired'>('idle')
   const [error, setError] = useState('')
 
-  const pollSession = useCallback(async (id: string) => {
-    const response = await fetch(`/api/session/${id}`)
+  const pollSession = useCallback(async (id: string, seal: string) => {
+    const effectiveSeal = loadVerifiedSessionSeal(id) ?? seal
+    const sealQuery = effectiveSeal ? `?seal=${encodeURIComponent(effectiveSeal)}` : ''
+    const response = await fetch(`/api/session/${id}${sealQuery}`)
     const data = await response.json()
 
     if (!response.ok) {
-      throw new Error(data.error ?? 'Failed to load session')
+      throw new Error(data.hint ?? data.error ?? 'Failed to load session')
     }
 
     setStatus(data.status)
@@ -30,22 +37,47 @@ export function VerifyForm() {
       setResolvedName(data.ensName)
       setTenantAddress(data.tenantAddress ?? '')
       setCredential(data.credential)
+      if (effectiveSeal) setSessionSeal(effectiveSeal)
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const urlSessionId = params.get('session')
+    const urlSeal = params.get('seal')
+    if (urlSessionId && urlSeal) {
+      setSessionId(urlSessionId)
+      setSessionSeal(urlSeal)
+      setStatus('pending')
+      void pollSession(urlSessionId, urlSeal).catch((pollError) => {
+        setError(pollError instanceof Error ? pollError.message : 'Failed to load session')
+      })
+    }
+  }, [pollSession])
+
+  useEffect(() => {
+    return subscribeVerifiedSession((id, verifiedSeal) => {
+      if (!sessionId || id !== sessionId) return
+      setSessionSeal(verifiedSeal)
+      void pollSession(id, verifiedSeal)
+    })
+  }, [pollSession, sessionId])
 
   useEffect(() => {
     if (!sessionId || status === 'verified' || status === 'expired') return
 
     const interval = setInterval(() => {
-      void pollSession(sessionId).catch((pollError) => {
+      void pollSession(sessionId, sessionSeal).catch((pollError) => {
         setError(pollError instanceof Error ? pollError.message : 'Failed to poll session')
       })
     }, 3000)
 
-    void pollSession(sessionId)
+    void pollSession(sessionId, sessionSeal)
 
     return () => clearInterval(interval)
-  }, [sessionId, status, pollSession])
+  }, [sessionId, sessionSeal, status, pollSession])
 
   async function handleCreateSession() {
     setCreating(true)
@@ -64,6 +96,7 @@ export function VerifyForm() {
       }
 
       setSessionId(data.sessionId)
+      setSessionSeal(data.sessionSeal ?? '')
       setPresentUrl(data.presentUrl)
       setStatus('pending')
     } catch (createError) {

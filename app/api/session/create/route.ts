@@ -10,12 +10,13 @@ export async function POST(request: NextRequest) {
     const nonce = generateSiweNonce()
     const session = createVerificationSession(nonce)
     const origin = request.nextUrl.origin
-    const presentUrl = `${origin}/present?session=${session.sessionId}`
+    const presentUrl = `${origin}/present?session=${session.sessionId}&seal=${encodeURIComponent(session.sessionSeal)}`
 
     return NextResponse.json({
       sessionId: session.sessionId,
       nonce: session.nonce,
       expiresAt: session.expiresAt,
+      sessionSeal: session.sessionSeal,
       presentUrl,
     })
   } catch (error) {

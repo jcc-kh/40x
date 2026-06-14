@@ -5,14 +5,23 @@ import { getVerificationSession } from '@/lib/sessions'
 export const runtime = 'nodejs'
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ sessionId: string }> },
 ) {
   const { sessionId } = await context.params
-  const session = getVerificationSession(sessionId)
+  const seal = request.nextUrl.searchParams.get('seal') ?? undefined
+  const session = getVerificationSession(sessionId, seal)
 
   if (!session) {
-    return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+    return NextResponse.json(
+      {
+        error: 'Session not found',
+        hint: seal
+          ? 'Session seal invalid or expired — ask the landlord for a new invitation link.'
+          : 'Missing session seal — open the full invitation link from the landlord.',
+      },
+      { status: 404 },
+    )
   }
 
   return NextResponse.json({

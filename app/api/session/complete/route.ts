@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, message, signature, address } = await request.json()
+    const { sessionId, message, signature, address, sessionSeal } = await request.json()
 
     if (!sessionId || !message || !signature || !address) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid address' }, { status: 400 })
     }
 
-    const session = getVerificationSession(sessionId)
+    const session = getVerificationSession(sessionId, sessionSeal)
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })
     }
@@ -77,13 +77,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Credential expired' }, { status: 410 })
     }
 
-    markSessionVerified(sessionId, address, discovered.ensName, discovered.credential)
+    const verifiedSessionSeal = markSessionVerified(
+      sessionId,
+      address,
+      discovered.ensName,
+      discovered.credential,
+      sessionSeal,
+    )
 
     return NextResponse.json({
       success: true,
       status: 'verified',
       ensName: discovered.ensName,
       credential: discovered.credential,
+      sessionSeal: verifiedSessionSeal,
     })
   } catch (error) {
     console.error('Session complete error:', error)

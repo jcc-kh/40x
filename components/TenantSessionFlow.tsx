@@ -14,6 +14,7 @@ import { EnsWriteProgress } from '@/components/EnsWriteProgress'
 import { WorldIDVerify } from '@/components/WorldIDVerify'
 import { getEnsChainId } from '@/lib/ens'
 import { buildPresentationSiweMessage } from '@/lib/siwe'
+import { publishVerifiedSession } from '@/lib/session-client-storage'
 import { loadWorldIdVerification } from '@/lib/worldid-client-storage'
 import type { DocumentAttestation } from '@/lib/types'
 
@@ -48,9 +49,11 @@ async function registerDemoWorldId(
 interface TenantSessionFlowProps {
   /** Landlord session id from ?session= — required for landlord-initiated screening. */
   sessionId: string | null
+  /** Signed session envelope from ?seal= — required on Vercel serverless. */
+  sessionSeal?: string | null
 }
 
-export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
+export function TenantSessionFlow({ sessionId, sessionSeal }: TenantSessionFlowProps) {
   const { isConnected, address } = useAccount()
   const publicClient = usePublicClient()
   const { signMessageAsync } = useSignMessage()
@@ -76,10 +79,11 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
   const loadSession = useCallback(async () => {
     if (!sessionId) return
 
-    const response = await fetch(`/api/session/${sessionId}`)
+    const sealQuery = sessionSeal ? `?seal=${encodeURIComponent(sessionSeal)}` : ''
+    const response = await fetch(`/api/session/${sessionId}${sealQuery}`)
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error ?? 'Failed to load session')
+      throw new Error(data.hint ?? data.error ?? 'Failed to load session')
     }
 
     if (data.status === 'verified') {
@@ -92,7 +96,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
     }
 
     setSessionNonce(data.nonce ?? '')
-  }, [sessionId])
+  }, [sessionId, sessionSeal])
 
   useEffect(() => {
     if (!sessionId) return
@@ -247,6 +251,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
           message,
           signature,
           address,
+          sessionSeal,
         }),
       })
 
@@ -271,6 +276,10 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
         })
         setAttestationHash(data.credential.attestationHash)
         setAccessSubname(data.ensName ?? accessSubname)
+      }
+
+      if (data.sessionSeal && sessionId) {
+        publishVerifiedSession(sessionId, data.sessionSeal)
       }
 
       setStep('done')

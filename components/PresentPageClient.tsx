@@ -8,6 +8,7 @@ import { TenantSessionFlow } from '@/components/TenantSessionFlow'
 export function PresentPageClient() {
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('session')
+  const sessionSeal = searchParams.get('seal')
 
   return (
     <>
@@ -21,7 +22,7 @@ export function PresentPageClient() {
         </Link>
       </div>
 
-      <TenantSessionFlow sessionId={sessionId} />
+      <TenantSessionFlow sessionId={sessionId} sessionSeal={sessionSeal} />
     </>
   )
 }
