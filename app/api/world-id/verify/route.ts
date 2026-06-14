@@ -18,7 +18,18 @@ import {
 import { getWorldIdAction } from '@/lib/types'
 import { isAddress } from 'viem'
 
+import { issueWorldIdVerificationSeal } from '@/lib/worldid-seal'
+
 export const runtime = 'nodejs'
+
+function sealForAddress(nullifier: string, address?: string) {
+  if (!address || !isAddress(address)) return undefined
+  try {
+    return issueWorldIdVerificationSeal(nullifier, address)
+  } catch {
+    return undefined
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +58,7 @@ export async function POST(request: NextRequest) {
           nullifier,
           devBypass: true,
           alreadyIssuedCredential: hasIssuedCredential(nullifier),
+          verificationSeal: sealForAddress(nullifier, address),
         })
       }
 
@@ -62,6 +74,7 @@ export async function POST(request: NextRequest) {
           devBypass: true,
           demoBypass: true,
           alreadyIssuedCredential: hasIssuedCredential(nullifier),
+          verificationSeal: sealForAddress(nullifier, address),
         })
       }
 
@@ -129,6 +142,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             ...finalized,
             worldcoinCode: code,
+            verificationSeal: sealForAddress(nullifierFromProof, address),
           })
         }
 
@@ -146,6 +160,7 @@ export async function POST(request: NextRequest) {
               recovered: true,
               alreadyIssuedCredential: recovered.alreadyIssuedCredential,
               worldcoinCode: code,
+              verificationSeal: sealForAddress(recovered.nullifier, address),
             })
           }
         }
@@ -182,6 +197,7 @@ export async function POST(request: NextRequest) {
           nullifier,
           recovered: true,
           alreadyIssuedCredential: true,
+          verificationSeal: sealForAddress(nullifier, address),
         })
       }
       console.error('[World ID] local duplicate credential block', {
@@ -201,7 +217,11 @@ export async function POST(request: NextRequest) {
       nullifier: nullifier.slice(0, 16) + '…',
     })
 
-    return NextResponse.json({ success: true, nullifier })
+    return NextResponse.json({
+      success: true,
+      nullifier,
+      verificationSeal: sealForAddress(nullifier, address),
+    })
   } catch (error) {
     console.error('[World ID] verify unexpected error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

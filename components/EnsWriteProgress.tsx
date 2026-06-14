@@ -17,6 +17,7 @@ interface EnsWriteProgressProps {
   attestation: DocumentAttestation
   attestationHash: string
   worldIdNullifier: string
+  worldIdVerificationSeal?: string
   tenantAddress: string
   onComplete: () => void
   onError: (message: string) => void
@@ -27,6 +28,7 @@ export function EnsWriteProgress({
   attestation,
   attestationHash,
   worldIdNullifier,
+  worldIdVerificationSeal,
   tenantAddress,
   onComplete,
   onError,
@@ -79,7 +81,11 @@ export function EnsWriteProgress({
       await fetch('/api/credential/complete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ worldIdNullifier }),
+        body: JSON.stringify({
+          worldIdNullifier,
+          verificationSeal: worldIdVerificationSeal,
+          tenantAddress,
+        }),
       })
       onComplete()
     } catch (error) {

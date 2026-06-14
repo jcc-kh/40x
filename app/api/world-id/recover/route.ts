@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAddress } from 'viem'
 
 import { recoverAlreadyVerifiedWorldId } from '@/lib/worldid-recover'
+import { issueWorldIdVerificationSeal } from '@/lib/worldid-seal'
 
 export const runtime = 'nodejs'
 
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       source: recovered.source,
       alreadyIssuedCredential: recovered.alreadyIssuedCredential,
       demoBypass: recovered.source === 'demo',
+      verificationSeal: issueWorldIdVerificationSeal(recovered.nullifier, address),
     })
   } catch (error) {
     console.error('[World ID] recover error:', error)

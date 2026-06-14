@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { assertNullifierVerified, markCredentialIssued } from '@/lib/nullifiers'
+import { markCredentialIssued, resolveVerifiedNullifier } from '@/lib/nullifiers'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    const { worldIdNullifier } = await request.json()
+    const { worldIdNullifier, verificationSeal, tenantAddress } = await request.json()
 
     if (!worldIdNullifier) {
       return NextResponse.json({ error: 'Missing worldIdNullifier' }, { status: 400 })
     }
 
-    assertNullifierVerified(worldIdNullifier)
+    await resolveVerifiedNullifier(worldIdNullifier, {
+      verificationSeal,
+      tenantAddress,
+    })
     markCredentialIssued(worldIdNullifier)
 
     return NextResponse.json({ success: true })

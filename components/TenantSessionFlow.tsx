@@ -30,7 +30,7 @@ const worldIdSkipEnabled = process.env.NEXT_PUBLIC_SKIP_WORLD_ID_VERIFY === 'tru
 async function registerDemoWorldId(
   signal: string,
   walletAddress: string,
-): Promise<string | null> {
+): Promise<{ nullifier: string; verificationSeal?: string } | null> {
   const response = await fetch('/api/world-id/verify', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -38,7 +38,10 @@ async function registerDemoWorldId(
   })
   const data = await response.json()
   if (!response.ok) return null
-  return data.nullifier ?? null
+  return {
+    nullifier: data.nullifier ?? null,
+    verificationSeal: data.verificationSeal,
+  }
 }
 
 interface TenantSessionFlowProps {
@@ -56,6 +59,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
   const [publishTarget, setPublishTarget] = useState<string | null>(null)
   const [hasExistingCredential, setHasExistingCredential] = useState(false)
   const [worldIdNullifier, setWorldIdNullifier] = useState<string | null>(null)
+  const [worldIdVerificationSeal, setWorldIdVerificationSeal] = useState<string | null>(null)
   const [documents, setDocuments] = useState<DocumentFiles>({
     passport: null,
     bank: null,
@@ -183,6 +187,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
           thresholdUSD: 5000,
           worldIdNullifier,
           tenantAddress: address,
+          verificationSeal: worldIdVerificationSeal,
         }),
       })
 
@@ -281,13 +286,14 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
     if (worldIdSkipEnabled && address && publishTarget) {
       setError('')
       void (async () => {
-        const nullifier = await registerDemoWorldId(publishTarget, address)
-        if (!nullifier) {
+        const result = await registerDemoWorldId(publishTarget, address)
+        if (!result?.nullifier) {
           setError('Failed to skip World ID for demo — check server logs')
           setStep('worldid')
           return
         }
-        setWorldIdNullifier(nullifier)
+        setWorldIdNullifier(result.nullifier)
+        setWorldIdVerificationSeal(result.verificationSeal ?? null)
         setStep('upload')
       })()
       return
@@ -412,6 +418,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
                 onVerified={(nullifier, meta) => {
                   setError('')
                   setWorldIdNullifier(nullifier)
+                  setWorldIdVerificationSeal(meta?.verificationSeal ?? null)
                   if (meta?.alreadyIssuedCredential || hasExistingCredential) {
                     setHasExistingCredential(true)
                     setStep('sign')
@@ -468,6 +475,7 @@ export function TenantSessionFlow({ sessionId }: TenantSessionFlowProps) {
           attestation={attestation}
           attestationHash={attestationHash}
           worldIdNullifier={worldIdNullifier ?? ''}
+          worldIdVerificationSeal={worldIdVerificationSeal ?? ''}
           tenantAddress={address}
           onComplete={handleEnsWriteComplete}
           onError={setError}

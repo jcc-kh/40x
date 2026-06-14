@@ -10,6 +10,7 @@ import { isTerminalAlreadyVerifiedError } from '@/lib/worldid-errors'
 export interface WorldIdVerifiedMeta {
   recovered?: boolean
   alreadyIssuedCredential?: boolean
+  verificationSeal?: string
 }
 
 interface WorldIDVerifyProps {
@@ -45,6 +46,7 @@ async function recoverAlreadyVerified(
 ): Promise<{
   nullifier: string
   alreadyIssuedCredential: boolean
+  verificationSeal?: string
 } | null> {
   const response = await fetch('/api/world-id/recover', {
     method: 'POST',
@@ -56,6 +58,7 @@ async function recoverAlreadyVerified(
   return {
     nullifier: data.nullifier,
     alreadyIssuedCredential: Boolean(data.alreadyIssuedCredential),
+    verificationSeal: data.verificationSeal,
   }
 }
 
@@ -107,6 +110,7 @@ export function WorldIDVerify({
             advanceWithNullifier(data.nullifier, {
               recovered: true,
               alreadyIssuedCredential: Boolean(data.alreadyIssuedCredential),
+              verificationSeal: data.verificationSeal,
             })
             return
           }
@@ -133,6 +137,7 @@ export function WorldIDVerify({
           advanceWithNullifier(recovered.nullifier, {
             recovered: true,
             alreadyIssuedCredential: recovered.alreadyIssuedCredential,
+            verificationSeal: recovered.verificationSeal,
           })
           return
         }
@@ -202,6 +207,7 @@ export function WorldIDVerify({
           advanceWithNullifier(recovered.nullifier, {
             recovered: true,
             alreadyIssuedCredential: recovered.alreadyIssuedCredential,
+            verificationSeal: recovered.verificationSeal,
           })
         }
       } finally {
@@ -255,7 +261,10 @@ export function WorldIDVerify({
                   if (!response.ok) {
                     throw new Error(data.error ?? 'Dev bypass failed')
                   }
-                  advanceWithNullifier(data.nullifier, { recovered: true })
+                  advanceWithNullifier(data.nullifier, {
+                    recovered: true,
+                    verificationSeal: data.verificationSeal,
+                  })
                 } catch (error) {
                   onError(error instanceof Error ? error.message : 'Dev bypass failed')
                 }
@@ -323,6 +332,7 @@ export function WorldIDVerify({
           advanceWithNullifier(data.nullifier, {
             recovered: Boolean(data.recovered),
             alreadyIssuedCredential: Boolean(data.alreadyIssuedCredential),
+            verificationSeal: data.verificationSeal,
           })
         }}
         onSuccess={() => setOpen(false)}

@@ -7,7 +7,7 @@ import { computeAttestationHash, resolvePublishTarget } from '@/lib/ens'
 import { storeInferenceQueued } from '@/lib/inference-store'
 import {
   assertNoExistingCredential,
-  assertNullifierVerified,
+  resolveVerifiedNullifier,
 } from '@/lib/nullifiers'
 
 export const runtime = 'nodejs'
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
       worldIdNullifier,
       tenantAddress,
       useFixture,
+      verificationSeal,
     } = await request.json()
 
     if (!worldIdNullifier || !tenantAddress) {
@@ -29,9 +30,6 @@ export async function POST(request: NextRequest) {
     if (!isAddress(tenantAddress)) {
       return NextResponse.json({ error: 'Invalid tenantAddress' }, { status: 400 })
     }
-
-    assertNullifierVerified(worldIdNullifier)
-    assertNoExistingCredential(worldIdNullifier)
 
     const accessSubname = await resolvePublishTarget(tenantAddress)
     if (!accessSubname) {
@@ -43,6 +41,13 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+
+    await resolveVerifiedNullifier(worldIdNullifier, {
+      verificationSeal,
+      tenantAddress,
+      ensName: accessSubname,
+    })
+    assertNoExistingCredential(worldIdNullifier)
 
     const threshold = thresholdUSD ?? 5000
 

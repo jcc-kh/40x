@@ -108,6 +108,45 @@ export function hasIssuedCredential(nullifier: string): boolean {
   return Boolean(row?.credential_issued)
 }
 
+export interface WorldIdVerificationContext {
+  verificationSeal?: string
+  tenantAddress?: string
+  ensName?: string
+}
+
+export async function resolveVerifiedNullifier(
+  nullifier: string,
+  context?: WorldIdVerificationContext,
+): Promise<void> {
+  if (hasVerifiedNullifier(nullifier)) return
+
+  if (context?.verificationSeal && context.tenantAddress) {
+    const { verifyWorldIdVerificationSeal } = await import('@/lib/worldid-seal')
+    if (
+      verifyWorldIdVerificationSeal(
+        context.verificationSeal,
+        nullifier,
+        context.tenantAddress,
+      )
+    ) {
+      storeVerifiedNullifier(nullifier, context.ensName, context.tenantAddress)
+      return
+    }
+  }
+
+  if (context?.tenantAddress) {
+    const { recoverAlreadyVerifiedWorldId } = await import('@/lib/worldid-recover')
+    const recovered = await recoverAlreadyVerifiedWorldId(
+      context.tenantAddress,
+      context.ensName,
+      { allowDemoFallback: false },
+    )
+    if (recovered?.nullifier === nullifier) return
+  }
+
+  throw new Error('World ID verification required before document analysis')
+}
+
 export function assertNullifierVerified(nullifier: string) {
   if (!hasVerifiedNullifier(nullifier)) {
     throw new Error('World ID verification required before document analysis')
