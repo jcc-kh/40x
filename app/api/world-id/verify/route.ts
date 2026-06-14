@@ -34,24 +34,49 @@ export async function POST(request: NextRequest) {
       hasIdkitResponse: Boolean(idkitResponse),
     })
 
+    if (devBypass === true) {
+      if (isWorldIdDevBypassEnabled()) {
+        const nullifier = createDevNullifier(signal ?? ensName, address)
+        storeVerifiedNullifier(nullifier, signal ?? ensName, address)
+        console.info('[World ID] dev bypass', {
+          nullifier: nullifier.slice(0, 24) + '…',
+          hasAddress: Boolean(address),
+        })
+        return NextResponse.json({
+          success: true,
+          nullifier,
+          devBypass: true,
+          alreadyIssuedCredential: hasIssuedCredential(nullifier),
+        })
+      }
+
+      if (isWorldIdDemoBypassAllowed()) {
+        const nullifier = createDevNullifier(signal ?? ensName, address)
+        storeVerifiedNullifier(nullifier, signal ?? ensName, address)
+        console.info('[World ID] demo bypass used', {
+          nullifier: nullifier.slice(0, 24) + '…',
+        })
+        return NextResponse.json({
+          success: true,
+          nullifier,
+          devBypass: true,
+          demoBypass: true,
+          alreadyIssuedCredential: hasIssuedCredential(nullifier),
+        })
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            'World ID skip is disabled. Set SKIP_WORLD_ID_VERIFY=true on the server (Vercel env vars).',
+        },
+        { status: 403 },
+      )
+    }
+
     if (!config.rpId) {
       console.error('[World ID] verify rejected — missing WORLD_RP_ID')
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
-
-    if (devBypass === true && isWorldIdDemoBypassAllowed()) {
-      const nullifier = createDevNullifier(signal ?? ensName, address)
-      storeVerifiedNullifier(nullifier, signal ?? ensName, address)
-      console.info('[World ID] demo/dev bypass used', {
-        nullifier: nullifier.slice(0, 24) + '…',
-        explicitSkip: isWorldIdDevBypassEnabled(),
-      })
-      return NextResponse.json({
-        success: true,
-        nullifier,
-        devBypass: true,
-        demoBypass: !isWorldIdDevBypassEnabled(),
-      })
     }
 
     if (!idkitResponse) {

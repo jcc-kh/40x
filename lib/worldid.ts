@@ -9,11 +9,9 @@ export function getWorldIdConfig() {
   }
 }
 
+/** When true, POST /api/world-id/verify accepts devBypass (local demo or Vercel with env set). */
 export function isWorldIdDevBypassEnabled(): boolean {
-  return (
-    process.env.NODE_ENV !== 'production' &&
-    process.env.SKIP_WORLD_ID_VERIFY === 'true'
-  )
+  return process.env.SKIP_WORLD_ID_VERIFY === 'true'
 }
 
 /** Local demo / hackathon — allow synthetic nullifiers outside production. */
@@ -28,9 +26,7 @@ export function createDemoNullifierForAddress(address: string, signal?: string):
 }
 
 export function createDevNullifier(signal?: string, address?: string): string {
-  if (address) {
-    return createDemoNullifierForAddress(address, signal)
-  }
+  if (address) return createDemoNullifierForAddress(address, signal)
   const suffix = signal?.slice(0, 32) ?? 'local'
   return `dev-nullifier-${suffix}-${Date.now()}`
 }
