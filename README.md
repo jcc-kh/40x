@@ -52,7 +52,7 @@ flowchart TB
   end
 
   subgraph Chain["Ethereum / ENS"]
-    ENS[screening.{name}.eth text records]
+    ENS["screening.{name}.eth text records"]
   end
 
   L1 --> API
