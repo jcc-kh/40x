@@ -9,6 +9,7 @@ export function VerifyForm() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [presentUrl, setPresentUrl] = useState('')
   const [creating, setCreating] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [credential, setCredential] = useState<CredentialRecord | null>(null)
   const [resolvedName, setResolvedName] = useState('')
   const [tenantAddress, setTenantAddress] = useState('')
@@ -52,6 +53,7 @@ export function VerifyForm() {
     setCredential(null)
     setResolvedName('')
     setTenantAddress('')
+    setCopied(false)
 
     try {
       const response = await fetch('/api/session/create', { method: 'POST' })
@@ -73,7 +75,14 @@ export function VerifyForm() {
 
   async function handleCopyLink() {
     if (!presentUrl) return
-    await navigator.clipboard.writeText(presentUrl)
+
+    try {
+      await navigator.clipboard.writeText(presentUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Could not copy — select the link and copy manually.')
+    }
   }
 
   const expiresAt = credential ? Number.parseInt(credential.expiresAt, 10) : 0
@@ -83,42 +92,54 @@ export function VerifyForm() {
     <>
       <div className="mb-6 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         Start a verification session and share the link with your applicant. They connect their
-        wallet, re-verify with World ID, and sign — proving they hold the credential, not just the
-        link.
+        wallet and sign — proving they control the credential. World ID uniqueness is checked once
+        at credential creation.
       </div>
 
-      {!sessionId ? (
+      {!sessionId || status === 'verified' ? (
         <button
           type="button"
           onClick={() => void handleCreateSession()}
           disabled={creating}
           className="rounded bg-black px-6 py-3 text-white disabled:opacity-50"
         >
-          {creating ? 'Creating session…' : 'Start verification session'}
+          {creating
+            ? 'Creating session…'
+            : status === 'verified'
+              ? 'Verify another applicant'
+              : 'Start verification session'}
         </button>
       ) : null}
 
       {sessionId && status === 'pending' ? (
-        <div className="mt-6 space-y-4 rounded-lg border p-6">
-          <h2 className="text-lg font-semibold">Waiting for tenant presentation</h2>
+        <div className="mt-6 space-y-4 rounded-lg border border-zinc-200 p-6">
+          <h2 className="text-lg font-semibold text-zinc-900">Waiting for tenant presentation</h2>
           <p className="text-sm text-zinc-600">
             Share this link with the applicant (QR, SMS, or in person):
           </p>
-          <p className="break-all rounded bg-zinc-50 p-3 font-mono text-sm">{presentUrl}</p>
-          <div className="flex gap-3">
+          <a
+            href={presentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block break-all rounded bg-zinc-100 p-3 font-mono text-sm text-blue-700 underline"
+          >
+            {presentUrl}
+          </a>
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => void handleCopyLink()}
-              className="rounded border px-4 py-2 text-sm"
+              className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
             >
-              Copy link
+              {copied ? 'Copied!' : 'Copy link'}
             </button>
             <button
               type="button"
               onClick={() => void handleCreateSession()}
-              className="rounded border px-4 py-2 text-sm"
+              disabled={creating}
+              className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
             >
-              New session
+              {creating ? 'Creating…' : 'New session'}
             </button>
           </div>
           <p className="text-sm text-zinc-500">Polling for live proof…</p>
@@ -136,7 +157,7 @@ export function VerifyForm() {
               {credential.verified === 'true' && !isExpired ? '✅' : '⚠️'}
             </span>
             <div>
-              <h2 className="text-xl font-semibold">{resolvedName}</h2>
+              <h2 className="text-xl font-semibold text-zinc-900">{resolvedName}</h2>
               <p className="text-sm text-zinc-500">
                 {isExpired ? 'Credential expired' : 'Live presentation verified'}
               </p>
@@ -169,7 +190,7 @@ export function VerifyForm() {
           />
 
           <p className="text-xs text-zinc-400">
-            SIWE wallet proof · World ID nullifier matched · ENS credential discovered from wallet
+            SIWE wallet proof · ENS credential from wallet · World ID at issuance
           </p>
         </div>
       ) : null}

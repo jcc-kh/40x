@@ -7,13 +7,12 @@ import {
 } from '@/lib/ens'
 import { getVerificationSession, markSessionVerified } from '@/lib/sessions'
 import { verifyPresentationSiwe } from '@/lib/siwe'
-import { verifyWorldIdProof } from '@/lib/worldid'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, message, signature, address, idkitResponse } = await request.json()
+    const { sessionId, message, signature, address } = await request.json()
 
     if (!sessionId || !message || !signature || !address) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -73,18 +72,6 @@ export async function POST(request: NextRequest) {
     const expiresAt = Number.parseInt(discovered.credential.expiresAt, 10)
     if (Number.isFinite(expiresAt) && expiresAt < Math.floor(Date.now() / 1000)) {
       return NextResponse.json({ error: 'Credential expired' }, { status: 410 })
-    }
-
-    if (!idkitResponse) {
-      return NextResponse.json({ error: 'World ID presentation proof required' }, { status: 400 })
-    }
-
-    const nullifier = await verifyWorldIdProof(idkitResponse)
-    if (nullifier !== discovered.credential.worldIdNullifier) {
-      return NextResponse.json(
-        { error: 'World ID nullifier does not match credential holder' },
-        { status: 403 },
-      )
     }
 
     markSessionVerified(sessionId, address, discovered.ensName, discovered.credential)

@@ -35,7 +35,15 @@ export async function verifyWorldIdProof(idkitResponse: unknown): Promise<string
 
   const verifyData = await verifyResponse.json()
   if (!verifyResponse.ok || !verifyData.success) {
-    throw new Error('World ID verification failed')
+    const detail =
+      verifyData.detail ??
+      verifyData.error_description ??
+      verifyData.error ??
+      verifyData.message ??
+      verifyData.code
+    throw new Error(
+      typeof detail === 'string' ? detail : 'World ID verification failed',
+    )
   }
 
   const nullifier = extractNullifierFromVerifyResponse(verifyData)

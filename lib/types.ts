@@ -78,6 +78,7 @@ export interface CredentialRecord {
 }
 
 export const WORLD_ID_ACTION = 'verify-credential'
+export const WORLD_ID_PRESENT_ACTION = 'present-credential'
 
 export function getAccessSubname(ensName: string): string {
   const normalized = ensName.trim().toLowerCase()

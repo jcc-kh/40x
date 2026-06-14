@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 
 import { ConnectWallet } from '@/components/ConnectWallet'
-import { WorldIDVerify } from '@/components/WorldIDVerify'
 import { getEnsChainId } from '@/lib/ens'
 import { buildPresentationSiweMessage } from '@/lib/siwe'
 
@@ -17,9 +16,6 @@ export function PresentCredential() {
   const { signMessageAsync } = useSignMessage()
 
   const [nonce, setNonce] = useState('')
-  const [presentationSignal, setPresentationSignal] = useState<string | null>(null)
-  const [idkitResponse, setIdkitResponse] = useState<unknown>(null)
-  const [worldIdDone, setWorldIdDone] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
@@ -54,24 +50,8 @@ export function PresentCredential() {
     })
   }, [loadSession])
 
-  useEffect(() => {
-    if (!address) return
-
-    async function loadCredentialTarget() {
-      const response = await fetch(`/api/credential/discover?address=${address}`)
-      const data = await response.json()
-      if (response.ok) {
-        const signal =
-          data.credential?.accessSubname || data.ensName || data.publishTarget || null
-        setPresentationSignal(signal)
-      }
-    }
-
-    void loadCredentialTarget()
-  }, [address])
-
   async function handlePresent() {
-    if (!address || !sessionId || !nonce || !idkitResponse) return
+    if (!address || !sessionId || !nonce) return
 
     setSubmitting(true)
     setError('')
@@ -96,7 +76,6 @@ export function PresentCredential() {
           message,
           signature,
           address,
-          idkitResponse,
         }),
       })
 
@@ -136,8 +115,9 @@ export function PresentCredential() {
   return (
     <div className="space-y-6">
       <div className="rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        A landlord requested live proof that you hold a screening credential. Connect the wallet that
-        published your credential, verify with World ID, then sign once.
+        A landlord requested live proof that you hold a screening credential. Connect the wallet
+        that published your credential and sign once. World ID was already verified when you
+        created the credential — presentation uses wallet proof only (repeatable per session).
       </div>
 
       {error ? (
@@ -148,37 +128,16 @@ export function PresentCredential() {
         <h2 className="mb-4 text-xl font-semibold">Step 1: Connect wallet</h2>
         <ConnectWallet />
         {isConnected && address ? (
-          <p className="mt-3 text-sm text-zinc-500">
-            {presentationSignal
-              ? `Credential location: ${presentationSignal}`
-              : 'Looking up credential on ENS…'}
-          </p>
+          <p className="mt-3 text-sm text-zinc-500">Wallet connected: {address}</p>
         ) : null}
       </section>
 
-      {isConnected && address && presentationSignal ? (
+      {isConnected && address && nonce ? (
         <section className="rounded-lg border p-6">
-          <h2 className="mb-4 text-xl font-semibold">Step 2: Prove you&apos;re the holder</h2>
+          <h2 className="mb-4 text-xl font-semibold">Step 2: Sign presentation</h2>
           <p className="mb-4 text-sm text-zinc-600">
-            World ID nullifier must match the credential bound at issuance.
-          </p>
-          <WorldIDVerify
-            signal={presentationSignal}
-            skipDuplicateCheck
-            onVerified={(_nullifier, response) => {
-              setIdkitResponse(response)
-              setWorldIdDone(true)
-            }}
-            onError={setError}
-          />
-        </section>
-      ) : null}
-
-      {isConnected && worldIdDone ? (
-        <section className="rounded-lg border p-6">
-          <h2 className="mb-4 text-xl font-semibold">Step 3: Sign presentation</h2>
-          <p className="mb-4 text-sm text-zinc-600">
-            Sign a message to confirm wallet control for this verification session.
+            Sign a message to prove this wallet controls the ENS screening credential for this
+            landlord session.
           </p>
           <button
             type="button"
